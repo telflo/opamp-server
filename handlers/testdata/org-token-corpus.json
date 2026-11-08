@@ -1,0 +1,195 @@
+{
+  "_comment": "Cross-implementation parity corpus for the organization-variable fill-in. The reference is the opamp-server's Go, store/orgvariables (render_test.go reads this file); its ports, the API's TypeScript (the test-run fill-in), the validator's Python and the web's TypeScript (the reference extraction), each read it in their own tests by a path relative to them. They are hand-kept mirrors, and this corpus is the contract that catches drift: change the grammar, the escape-parity rule, the escaping of values or the unknown-name rule in one, and update the others AND this file. A live reference is ${org:NAME}, NAME [A-Za-z_][A-Za-z0-9_]* of any length (a variable's name is at most 128 characters, so a longer reference is live but never defined), opened by a $ that an even run of $ precedes (odd, inert). The legacy $orgvar:NAME form is plain text and stays literal; ${org:NAME:-default} too. A known name's value is written with every $ doubled, so confmap's pass yields the value exactly; an unknown name is left as written. A render row's names are every live reference's NAME, defined or not, once each, in the order first seen; an extract row's expected is the same list.",
+  "render": [
+    { "name": "substitutes_whole_scalar",
+      "text": "endpoint: ${org:OTLP_EP}\n",
+      "vars": {"OTLP_EP": "us:4317"},
+      "expected": "endpoint: us:4317\n",
+      "names": ["OTLP_EP"] },
+
+    { "name": "substitutes_embedded_in_scalar",
+      "text": "endpoint: https://${org:HOST}:4317\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "endpoint: https://x.example:4317\n",
+      "names": ["HOST"] },
+
+    { "name": "multiple_tokens",
+      "text": "a: ${org:OTLP_EP}\nb: ${org:SAMPLE}\n",
+      "vars": {"OTLP_EP": "us:4317", "SAMPLE": "0.5"},
+      "expected": "a: us:4317\nb: 0.5\n",
+      "names": ["OTLP_EP", "SAMPLE"] },
+
+    { "name": "unknown_name_survives",
+      "text": "x: ${org:MISSING}\n",
+      "vars": {"OTLP_EP": "us:4317"},
+      "expected": "x: ${org:MISSING}\n",
+      "names": ["MISSING"] },
+
+    { "name": "empty_map_is_identity",
+      "text": "a: ${org:OTLP_EP}\n",
+      "vars": {},
+      "expected": "a: ${org:OTLP_EP}\n",
+      "names": ["OTLP_EP"] },
+
+    { "name": "escaped_double_dollar_is_inert",
+      "text": "endpoint: $${org:HOST}\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "endpoint: $${org:HOST}\n",
+      "names": [] },
+
+    { "name": "triple_dollar_is_live",
+      "text": "endpoint: $$${org:HOST}\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "endpoint: $$x.example\n",
+      "names": ["HOST"] },
+
+    { "name": "quadruple_dollar_is_inert",
+      "text": "endpoint: $$$${org:HOST}\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "endpoint: $$$${org:HOST}\n",
+      "names": [] },
+
+    { "name": "default_syntax_unsupported",
+      "text": "endpoint: ${org:HOST:-fallback}\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "endpoint: ${org:HOST:-fallback}\n",
+      "names": [] },
+
+    { "name": "no_collision_with_env_provider",
+      "text": "a: ${env:HOST}\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "a: ${env:HOST}\n",
+      "names": [] },
+
+    { "name": "no_collision_with_bare_env_ref",
+      "text": "a: ${HOST}\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "a: ${HOST}\n",
+      "names": [] },
+
+    { "name": "prefix_is_not_a_match",
+      "text": "a: ${organization:HOST}\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "a: ${organization:HOST}\n",
+      "names": [] },
+
+    { "name": "scheme_is_case_sensitive",
+      "text": "a: ${ORG:HOST}\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "a: ${ORG:HOST}\n",
+      "names": [] },
+
+    { "name": "invalid_name_char_prevents_match",
+      "text": "a: ${org:HOST-EXTRA}\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "a: ${org:HOST-EXTRA}\n",
+      "names": [] },
+
+    { "name": "missing_closing_brace_survives",
+      "text": "a: ${org:HOST\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "a: ${org:HOST\n",
+      "names": [] },
+
+    { "name": "legacy_form_stays_literal",
+      "text": "endpoint: $orgvar:OTLP_EP\n",
+      "vars": {"OTLP_EP": "us:4317"},
+      "expected": "endpoint: $orgvar:OTLP_EP\n",
+      "names": [] },
+
+    { "name": "legacy_unknown_survives",
+      "text": "x: $orgvar:MISSING\n",
+      "vars": {"OTLP_EP": "us:4317"},
+      "expected": "x: $orgvar:MISSING\n",
+      "names": [] },
+
+    { "name": "escaped_legacy_form_is_inert",
+      "text": "a: $$orgvar:HOST\n",
+      "vars": {"HOST": "x.example"},
+      "expected": "a: $$orgvar:HOST\n",
+      "names": [] },
+
+    { "name": "mixed_forms_only_braced_renders",
+      "text": "a: ${org:OTLP_EP}\nb: $orgvar:SAMPLE\n",
+      "vars": {"OTLP_EP": "us:4317", "SAMPLE": "0.5"},
+      "expected": "a: us:4317\nb: $orgvar:SAMPLE\n",
+      "names": ["OTLP_EP"] },
+
+    { "name": "value_dollar_is_doubled",
+      "text": "a: ${org:P}\n",
+      "vars": {"P": "a$b"},
+      "expected": "a: a$$b\n",
+      "names": ["P"] },
+
+    { "name": "value_double_dollar_is_quadrupled",
+      "text": "a: ${org:P}\n",
+      "vars": {"P": "a$$b"},
+      "expected": "a: a$$$$b\n",
+      "names": ["P"] },
+
+    { "name": "value_env_reference_stays_literal",
+      "text": "home: ${org:H}\n",
+      "vars": {"H": "${env:HOME}"},
+      "expected": "home: $${env:HOME}\n",
+      "names": ["H"] },
+
+    { "name": "value_org_reference_is_not_filled_again",
+      "text": "a: ${org:A}\nb: ${org:B}\n",
+      "vars": {"A": "${org:B}", "B": "x"},
+      "expected": "a: $${org:B}\nb: x\n",
+      "names": ["A", "B"] },
+
+    { "name": "value_empty",
+      "text": "a: \"${org:E}\"\n",
+      "vars": {"E": ""},
+      "expected": "a: \"\"\n",
+      "names": ["E"] },
+
+    { "name": "value_unicode",
+      "text": "a: ${org:U}\n",
+      "vars": {"U": "é€😀 ü"},
+      "expected": "a: é€😀 ü\n",
+      "names": ["U"] },
+
+    { "name": "name_over_128_characters_is_a_live_reference",
+      "text": "a: ${org:N_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}\n",
+      "vars": {"OTLP_EP": "us:4317"},
+      "expected": "a: ${org:N_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}\n",
+      "names": ["N_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"] }
+  ],
+  "extract": [
+    { "name": "single", "text": "a: ${org:HOST}\n", "expected": ["HOST"] },
+
+    { "name": "dedupes_and_preserves_order",
+      "text": "a: ${org:B}\nb: ${org:A}\nc: ${org:B}\n",
+      "expected": ["B", "A"] },
+
+    { "name": "ignores_escaped",
+      "text": "a: $${org:HOST}\n",
+      "expected": [] },
+
+    { "name": "counts_triple_dollar",
+      "text": "a: $$${org:HOST}\n",
+      "expected": ["HOST"] },
+
+    { "name": "ignores_env_provider",
+      "text": "a: ${env:HOST}\n",
+      "expected": [] },
+
+    { "name": "ignores_default_syntax",
+      "text": "a: ${org:HOST:-x}\n",
+      "expected": [] },
+
+    { "name": "ignores_legacy_form",
+      "text": "a: $orgvar:HOST\n",
+      "expected": [] },
+
+    { "name": "ignores_uppercase_scheme", "text": "a: ${ORG:HOST}\n", "expected": [] },
+
+    { "name": "ignores_invalid_name_char", "text": "a: ${org:HOST-EXTRA}\n", "expected": [] },
+
+    { "name": "ignores_escaped_legacy_form", "text": "a: $$orgvar:HOST\n", "expected": [] },
+
+    { "name": "none", "text": "a: plain\n", "expected": [] }
+  ]
+}

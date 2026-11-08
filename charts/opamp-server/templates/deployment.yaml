@@ -1,0 +1,8 @@
+{{- include "opamp-server.guards" . }}
+{{- /*
+The two server Deployments, <fullname>-agent and <fullname>-management, each
+its own replicas, resources and disruption budget (templates/_server.tpl).
+*/}}
+{{ include "opamp-server.server" (dict "ctx" . "component" "agent") }}
+---
+{{ include "opamp-server.server" (dict "ctx" . "component" "management") }}

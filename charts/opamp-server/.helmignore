@@ -1,0 +1,10 @@
+# Files `helm package` leaves out of the chart's .tgz (it packages
+# everything not listed here). The render tests and their profiles live
+# beside the chart but never ship inside it.
+tests/
+.DS_Store
+*.swp
+*.bak
+*.tmp
+*.orig
+*~

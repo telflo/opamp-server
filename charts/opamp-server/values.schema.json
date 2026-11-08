@@ -1,0 +1,274 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "opamp-server chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "resourceName": {
+      "description": "A Kubernetes object's name (DNS-1123 subdomain), or empty.",
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$"
+    },
+    "secretKey": {
+      "description": "A key of a Secret, or empty.",
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^[-._a-zA-Z0-9]*$"
+    },
+    "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "stringMap": {"type": "object", "additionalProperties": {"type": "string"}},
+    "openObject": {"type": "object"},
+    "openList": {"type": "array"},
+    "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]},
+    "digest": {"type": "string", "pattern": "^(sha256:[a-f0-9]{64})?$"},
+    "repository": {
+      "description": "An image repository: a registry host (and port) or a name, then path components.",
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?(/[a-z0-9]+([._-]+[a-z0-9]+)*)*$"
+    },
+    "tag": {"type": "string", "pattern": "^([A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$"},
+    "tlsSecret": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"secretName": {"$ref": "#/definitions/resourceName"}}
+    },
+    "component": {
+      "description": "One component's Deployment: its pods, their resources and disruption budget, and its listener's TLS.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "replicas": {"description": "How many pods run; 0 stops the component.", "type": "integer", "minimum": 0},
+        "resources": {"$ref": "#/definitions/openObject"},
+        "podDisruptionBudget": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "minAvailable": {"$ref": "#/definitions/budget"},
+            "maxUnavailable": {"$ref": "#/definitions/budget"}
+          }
+        },
+        "tls": {"$ref": "#/definitions/tlsSecret"}
+      }
+    },
+    "budget": {
+      "description": "A number of pods, or a percentage such as 50%; null for unset.",
+      "oneOf": [
+        {"type": "null"},
+        {"type": "integer", "minimum": 0},
+        {"type": "string", "pattern": "^[0-9]{1,3}%$"}
+      ]
+    }
+  },
+  "properties": {
+    "global": {
+      "description": "Set by a parent chart when this chart is its dependency.",
+      "type": "object"
+    },
+    "enabled": {
+      "description": "A parent chart's condition for this chart, when it is a dependency.",
+      "type": "boolean"
+    },
+    "nameOverride": {
+      "type": "string",
+      "maxLength": 43,
+      "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$"
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "maxLength": 43,
+      "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$"
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {"$ref": "#/definitions/repository"},
+        "tag": {"$ref": "#/definitions/tag"},
+        "digest": {"$ref": "#/definitions/digest"},
+        "pullPolicy": {"$ref": "#/definitions/pullPolicy"}
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {"name": {"$ref": "#/definitions/resourceName"}}
+      }
+    },
+    "terminationGracePeriodSeconds": {"type": "integer", "minimum": 30},
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "existingSecret": {"$ref": "#/definitions/resourceName"},
+        "encryptionKeysPrevious": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"enabled": {"type": "boolean"}}
+        }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "publicUrl": {
+          "description": "The agent endpoint's URL as collectors reach it. Required (the template says so when it is empty).",
+          "type": "string",
+          "pattern": "^(https?://\\S+)?$"
+        },
+        "agent": {"$ref": "#/definitions/component"},
+        "management": {"$ref": "#/definitions/component"},
+        "heartbeatIntervalSeconds": {"type": ["integer", "null"], "minimum": 10, "maximum": 300},
+        "defaultRequestsPerMinute": {"type": ["integer", "null"], "minimum": 1, "maximum": 12000000},
+        "collectorRequestsPerMinute": {"type": ["integer", "null"], "minimum": 1, "maximum": 600},
+        "maxConcurrentRequests": {"type": ["integer", "null"], "minimum": 1, "maximum": 10000},
+        "maxConcurrentRequestsPerOrganization": {"type": ["integer", "null"], "minimum": 1, "maximum": 10000},
+        "shutdownDrainSeconds": {"type": ["integer", "null"], "minimum": 0, "maximum": 30},
+        "telemetry": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "otlpEndpoint": {"type": "string"},
+            "serviceName": {"type": "string"},
+            "resourceAttributes": {"type": "string"}
+          }
+        }
+      }
+    },
+    "extraEnv": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[-._a-zA-Z][-._a-zA-Z0-9]*$"},
+          "value": {"type": "string"},
+          "valueFrom": {"type": "object"}
+        }
+      }
+    },
+    "podAnnotations": {"$ref": "#/definitions/stringMap"},
+    "podLabels": {
+      "description": "More labels on the server's pods; never the selector's own keys.",
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "propertyNames": {
+        "not": {"enum": ["app.kubernetes.io/name", "app.kubernetes.io/instance", "app.kubernetes.io/component"]}
+      }
+    },
+    "nodeSelector": {"$ref": "#/definitions/stringMap"},
+    "tolerations": {"$ref": "#/definitions/openList"},
+    "affinity": {"$ref": "#/definitions/openObject"},
+    "topologySpreadConstraints": {"$ref": "#/definitions/openList"},
+    "priorityClassName": {"$ref": "#/definitions/resourceName"},
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": {"type": "boolean"},
+        "name": {"$ref": "#/definitions/resourceName"},
+        "annotations": {"$ref": "#/definitions/stringMap"}
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {"type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"]},
+            "port": {"$ref": "#/definitions/port"},
+            "nodePort": {"type": ["integer", "null"], "minimum": 1, "maximum": 65535},
+            "loadBalancerSourceRanges": {"type": "array", "items": {"type": "string"}},
+            "annotations": {"$ref": "#/definitions/stringMap"}
+          }
+        },
+        "management": {
+          "description": "Always ClusterIP: there is no type to set.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "annotations": {"$ref": "#/definitions/stringMap"}
+          }
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "management": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "from": {"type": "array", "items": {"type": "object"}}
+          }
+        }
+      }
+    },
+    "postgres": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repository": {"$ref": "#/definitions/repository"},
+            "tag": {"allOf": [{"$ref": "#/definitions/tag"}, {"minLength": 1}]},
+            "digest": {"$ref": "#/definitions/digest"},
+            "pullPolicy": {"$ref": "#/definitions/pullPolicy"}
+          }
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"existingSecret": {"$ref": "#/definitions/resourceName"}}
+        },
+        "database": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$"},
+        "persistence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "size": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"},
+            "storageClassName": {"$ref": "#/definitions/resourceName"}
+          }
+        },
+        "resources": {"$ref": "#/definitions/openObject"},
+        "podAnnotations": {"$ref": "#/definitions/stringMap"},
+        "nodeSelector": {"$ref": "#/definitions/stringMap"},
+        "tolerations": {"$ref": "#/definitions/openList"},
+        "affinity": {"$ref": "#/definitions/openObject"}
+      }
+    },
+    "externalDatabase": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {"type": "string", "maxLength": 253, "pattern": "^[A-Za-z0-9.-]*$"},
+        "port": {"$ref": "#/definitions/port"},
+        "database": {"type": "string", "pattern": "^([A-Za-z_][A-Za-z0-9_]{0,62})?$"},
+        "sslmode": {"type": "string", "enum": ["", "disable", "allow", "prefer", "require", "verify-ca", "verify-full"]},
+        "urlKeys": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "runtime": {"$ref": "#/definitions/secretKey"},
+            "migration": {"$ref": "#/definitions/secretKey"}
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,182 @@
+# The opamp-server on your machine, for development and trying it out: never
+# a deployment. Its passwords, its management secret and its encryption key
+# are development values, committed here and used nowhere else.
+#
+#   docker compose up -d --build
+#
+# then poll until both servers are healthy (`docker compose ps`), or ask their
+# /health and /ready (README.md, "Quick start"). `docker compose down -v` stops
+# them and deletes the database.
+#
+# Five steps, each waiting for the one before: Postgres; the bootstrap (the
+# roles and the database, as Postgres's superuser); `migrate up` (the
+# schema, as the database's owner); then the two servers, each its own
+# container on the same image and database, as the server's own role:
+#
+#   agent        `serve agent`: the agent endpoint collectors poll (51234).
+#                It holds no management secret.
+#   management   `serve management`: the management API (51235).
+#
+# Either can be stopped, restarted or rebuilt on its own (`docker compose
+# stop agent`). Both ports are published on the host's loopback only: the
+# secret and the key are public, and both listeners speak plain HTTP. Their
+# host ports default to 51234 and 51235; set OPAMP_AGENT_HOST_PORT and
+# OPAMP_MANAGEMENT_HOST_PORT to move them.
+#
+# A sixth service, `collector`, starts only when asked for, once a fleet
+# exists to join (README.md, "Quick start"):
+#
+#   OPAMP_TOKEN=<bearer> COLLECTOR_GROUP_ID=<group id> \
+#     docker compose --profile collector up -d --build --no-deps collector
+#
+# --no-deps builds and starts the collector alone: without it, Compose
+# would rebuild the server's image too, and each build is a new image, so
+# it would recreate the running agent endpoint.
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_PASSWORD: opamp-compose-postgres-development-password
+    # Unpublished: only the bootstrap, migrate and serve reach it.
+    volumes:
+      # postgres:18 keeps its data under /var/lib/postgresql (in a
+      # major-version folder it makes itself) and refuses a mount at the
+      # older .../data path.
+      - opamp-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # One-shot: deploy/bootstrap.sql as the superuser, which creates the
+  # three roles and the database if missing and sets the two passwords
+  # again. It is idempotent, so every `up` runs it. It reads the passwords
+  # from its environment, never from psql's command line.
+  bootstrap:
+    image: postgres:18
+    command: ["psql", "-h", "postgres", "-U", "postgres", "-d", "postgres", "-X", "-q",
+              "-v", "ON_ERROR_STOP=1", "-f", "/opamp/bootstrap.sql"]
+    environment:
+      PGPASSWORD: opamp-compose-postgres-development-password
+      OPAMP_OWNER_PASSWORD: opamp-compose-owner-development-password
+      OPAMP_RUNTIME_PASSWORD: opamp-compose-runtime-development-password
+    volumes:
+      - ./deploy/bootstrap.sql:/opamp/bootstrap.sql:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  # One-shot: the embedded migrations, as telflo_opamp_owner (the
+  # database's owner), then it exits. A no-op when the schema is current.
+  # serve refuses a schema that isn't exactly its own, so both servers wait
+  # for this. Every service on the image builds it: Compose would otherwise
+  # try to pull opamp-server:dev from a registry.
+  migrate:
+    build: .
+    image: opamp-server:dev
+    command: ["migrate", "up"]
+    environment:
+      OPAMP_MIGRATION_DATABASE_URL: postgresql://telflo_opamp_owner:opamp-compose-owner-development-password@postgres:5432/telflo_opamp
+    depends_on:
+      bootstrap: { condition: service_completed_successfully }
+    restart: "no"
+
+  # The agent endpoint (51234): `serve agent`, as telflo_opamp, a member of
+  # telflo_opamp_runtime that owns nothing.
+  #
+  # OPAMP_SERVER_URL is the URL each collector is handed with its rotate
+  # token and polls from then on, so it must be one the collectors reach.
+  # The default is this compose network's, which the `collector` service
+  # reaches. A collector run on the host itself needs
+  # http://localhost:51234/opamp/api/v1, and one in another container on
+  # Docker Desktop http://host.docker.internal:51234/opamp/api/v1. Set it
+  # in the environment Compose reads, with the port you publish.
+  #
+  # The bearers' encryption key is in the environment here, as the
+  # development values above are. A real deployment's key is a file
+  # (OPAMP_ENCRYPTION_KEY_FILE) readable by the image's user (uid 65532)
+  # only, and never in the environment. Here a file would be mounted with
+  # the checkout's mode, which Compose can't change: a clone made under
+  # `umask 077` would leave it unreadable, and neither server would start.
+  # Both servers hold it: the management API mints the bearers, the agent
+  # endpoint reads them.
+  #
+  # serve refuses this file's management secret and key, which everyone
+  # holds, unless OPAMP_ALLOW_DEVELOPMENT_SECRETS is "true", as only here.
+  # Never copy it into a deployment: generate your own values instead.
+  agent:
+    build: .
+    image: opamp-server:dev
+    command: ["serve", "agent"]
+    # Told to stop, serve keeps its listener open 5 s while /ready answers
+    # 503, gives requests in flight 10 s and those cut off 2 s more, then
+    # flushes telemetry for up to 10 s: Docker's default of 10 s would kill
+    # it part way.
+    stop_grace_period: 30s
+    environment:
+      OPAMP_DATABASE_URL: postgresql://telflo_opamp:opamp-compose-runtime-development-password@postgres:5432/telflo_opamp?pool_max_conns=10
+      OPAMP_ENCRYPTION_KEY: HJiuKzTRLDzM3hKGOw3Lj7tluHIULWUxfZUvpPxbtrQel55NA6EhyMC3HRuP1O/y
+      OPAMP_ALLOW_DEVELOPMENT_SECRETS: "true"
+      OPAMP_SERVER_URL: ${OPAMP_SERVER_URL:-http://agent:51234/opamp/api/v1}
+    ports:
+      - "127.0.0.1:${OPAMP_AGENT_HOST_PORT:-51234}:51234"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    # The image is distroless (no shell, no curl): its own `healthcheck`
+    # asks the agent port's /health.
+    healthcheck:
+      test: ["CMD", "/app/opamp-server", "healthcheck", "agent"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # The management API (51235): `serve management`, as the same role, with
+  # the management secret and the encryption key (above). It needs no
+  # OPAMP_SERVER_URL.
+  management:
+    build: .
+    image: opamp-server:dev
+    command: ["serve", "management"]
+    stop_grace_period: 30s
+    environment:
+      OPAMP_DATABASE_URL: postgresql://telflo_opamp:opamp-compose-runtime-development-password@postgres:5432/telflo_opamp?pool_max_conns=10
+      OPAMP_MANAGEMENT_SECRET: opamp-compose-development-management-secret-never-for-production
+      OPAMP_ENCRYPTION_KEY: HJiuKzTRLDzM3hKGOw3Lj7tluHIULWUxfZUvpPxbtrQel55NA6EhyMC3HRuP1O/y
+      OPAMP_ALLOW_DEVELOPMENT_SECRETS: "true"
+    ports:
+      - "127.0.0.1:${OPAMP_MANAGEMENT_HOST_PORT:-51235}:51235"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "/app/opamp-server", "healthcheck", "management"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # The quick start's collector: OpenTelemetry Collector Contrib run by the
+  # OpAMP supervisor (deploy/quickstart-collector), on this network. Only
+  # with `--profile collector`, since it needs a fleet's default bearer and a
+  # group's id, which exist only once a fleet is made. It is sent nothing
+  # until its group is assigned a published version, and runs on a
+  # configuration that does nothing until then.
+  collector:
+    profiles: [collector]
+    build: deploy/quickstart-collector
+    image: opamp-quickstart-collector:dev
+    # Compose reads both variables even without the profile, so they can't
+    # be marked required: started without them, the collector is refused
+    # (401, or no group) and its log says so.
+    environment:
+      OPAMP_ENDPOINT: http://agent:51234/opamp/api/v1
+      OPAMP_TOKEN: ${OPAMP_TOKEN:-}
+      COLLECTOR_GROUP_ID: ${COLLECTOR_GROUP_ID:-}
+    volumes:
+      - opamp-collector-data:/var/lib/opampsupervisor
+    depends_on:
+      agent: { condition: service_healthy }
+
+volumes:
+  opamp-postgres-data: {}
+  opamp-collector-data: {}

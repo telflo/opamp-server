@@ -1,0 +1,18 @@
+{
+  "$comment": "The licences this module's dependencies may carry: each allows redistribution. scripts/check-licenses.sh reads only \"allowed\". See CONTRIBUTING.md before changing it.",
+  "allowed": [
+    "MIT",
+    "MIT-0",
+    "ISC",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "0BSD",
+    "Apache-2.0",
+    "Unlicense",
+    "CC0-1.0",
+    "OFL-1.1",
+    "BlueOak-1.0.0",
+    "Python-2.0",
+    "PSF-2.0"
+  ]
+}

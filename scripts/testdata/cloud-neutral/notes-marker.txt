@@ -1,0 +1,1 @@
+A fixture line for check-chart-cloud-neutral.test.sh: annotate the account with iam.gke.io/gcp-service-account.

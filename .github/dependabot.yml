@@ -1,0 +1,41 @@
+# Weekly update pull requests for the Go modules, the workflows' actions
+# (pinned by commit) and the Dockerfile's base images (pinned by digest):
+# one pull request per ecosystem, so a week's updates take one CI run each
+# and merging one doesn't rebase, and rerun, the others. An update that
+# breaks its group is split out by hand. Each passes CI like any other
+# change.
+#
+# What moves only by a decision of its own (CONTRIBUTING.md, "The
+# toolchain") is never proposed: goose, and the golang image's Go line (its
+# digest within the line still moves). A Go module that asks for a newer
+# `go` line is such a decision too, but can't be told apart here: it shows
+# as a change to go.mod's `go` line in the pull request, and CI passes it
+# (setup-go installs the Go that line names), so review is what holds it.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: github.com/pressly/goose/v3
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: golang
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

@@ -1,0 +1,36 @@
+.env
+.env.*
+.vscode/launch.json
+__debug**
+
+# Local-dev structured log output (JSONFileLoggerRepository default path).
+# The OTLP bridge is the primary log path; this file is recreated on startup.
+logs/
+
+# Every .env.* above but this one, which is tracked: the authoritative
+# startup-config reference for the OpAMP server (memguard key handling,
+# multi-key rotation procedure, TLS modes).
+!.env.example
+
+# pprof dumps pulled from /debug/pprof — diagnostic output, never source
+goroutines*.txt
+*.pprof
+
+# The binary a plain `go build` writes here (named after the module path).
+/opamp-server
+
+# What `make check` writes: the gates' reports (go test's -json report).
+/.check/
+
+# The README quick start's working folder: credentials and fleet replies.
+/.quickstart/
+
+# GoReleaser's output (.goreleaser.yaml): the binaries and their archives.
+/dist/
+
+# Private release notes (deployment-steps.md): the owner's, never published.
+/deployment-steps.md
+
+# The owner's private plans and where the code came from: never published.
+/docs/superpowers/
+/PROVENANCE.md

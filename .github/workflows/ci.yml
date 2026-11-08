@@ -1,0 +1,125 @@
+# The gates every change passes: on each pull request, each push to main,
+# weekly (govulncheck's answer changes as advisories are published), and as
+# the first stage of a release (release.yml calls this workflow on the tag).
+# It builds the image and the binaries and publishes neither.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_call:
+    inputs:
+      ref:
+        description: The ref to check out (release.yml passes its tag)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels its older run; main's and a
+# release's runs always finish.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ inputs.ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  check:
+    name: make check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # The superuser Postgres `make check` needs, as docs/testing.md's
+    # throwaway one. Its password is a test value: the server is the job's.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: opamp-test-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.2.1
+      # psql runs in the service's container, so the client is the server's
+      # own version, as docs/testing.md runs it.
+      - name: make check
+        env:
+          OPAMP_TEST_ADMIN_DATABASE_URL: postgresql://postgres:opamp-test-ci@127.0.0.1:5432/postgres
+          PSQL: docker exec -i -e OPAMP_OWNER_PASSWORD -e OPAMP_RUNTIME_PASSWORD ${{ job.services.postgres.id }} psql -U postgres
+        run: make check
+
+  govulncheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: make go-vulncheck
+
+  # The image for the runner's platform, loaded into its engine and checked;
+  # the release builds both platforms (release.yml).
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - run: make image BUILDER=default
+      - run: make image-check BUILDER=default
+
+  # The release's binaries and archives (.goreleaser.yaml) as a snapshot:
+  # built, never published. A push to main keeps them as the run's artifact.
+  binaries:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          version: v2.19.0
+          args: release --snapshot --clean
+      - if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: opamp-server-binaries
+          path: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          if-no-files-found: error
+          retention-days: 30

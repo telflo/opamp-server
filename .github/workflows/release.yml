@@ -1,0 +1,183 @@
+# A release, from its annotated tag v<version> (CONTRIBUTING.md,
+# "Releasing"): every gate on the tag's commit (ci.yml), then the image,
+# the chart, and the binaries with their GitHub Release, in that order. The image's tag,
+# the chart's version and its appVersion are one version, and a published
+# version is never pushed again: a fix is a new version.
+#
+# It starts when the tag is pushed, or by hand ("Run workflow", naming a tag
+# already pushed) to finish a release that stopped part way: a step whose
+# version is published already is skipped, never pushed again.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag, already pushed (vX.Y.Z)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One release at a time, and none cancelled part way.
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  # Refused before anything runs: a tag that isn't vX.Y.Z, isn't annotated,
+  # or doesn't match the chart's version and appVersion at its commit.
+  version:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - id: tag
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::the tag must be vX.Y.Z (got '$TAG')"; exit 1
+          fi
+          echo "tag=$TAG" >>"$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >>"$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+      # checkout can leave a tag it checked out as a lightweight one: fetch
+      # the tag object itself.
+      - name: The tag is annotated and matches the chart
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          if [ "$(git cat-file -t "refs/tags/$TAG")" != tag ]; then
+            echo "::error::$TAG is a lightweight tag: a release is an annotated tag (git tag -a $TAG)"; exit 1
+          fi
+          chart=charts/opamp-server/Chart.yaml
+          chart_version=$(sed -n 's/^version:[[:space:]]*"\{0,1\}\([^"[:space:]]*\)"\{0,1\}[[:space:]]*$/\1/p' "$chart")
+          app_version=$(sed -n 's/^appVersion:[[:space:]]*"\{0,1\}\([^"[:space:]]*\)"\{0,1\}[[:space:]]*$/\1/p' "$chart")
+          if [ "$chart_version" != "$VERSION" ] || [ "$app_version" != "$VERSION" ]; then
+            echo "::error::$chart at $TAG has version '$chart_version' and appVersion '$app_version': both must be $VERSION"; exit 1
+          fi
+
+  ci:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: refs/tags/${{ needs.version.outputs.tag }}
+
+  publish:
+    needs: [version, ci]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # The environment admits only v* tags, and main for "Run workflow"
+    # (Settings → Environments); a required reviewer there would hold the
+    # job until approved.
+    environment: release
+    permissions:
+      contents: write # the GitHub Release
+      packages: write # the image and the chart, in GHCR
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      VERSION: ${{ needs.version.outputs.version }}
+      IMAGE: ghcr.io/telflo/opamp-server
+      CHART: oci://ghcr.io/telflo/charts/opamp-server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.version.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.2.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: helm registry login
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USER" --password-stdin
+      # A docker-container builder, which builds both platforms. The image's
+      # runtime stage runs nothing, so no emulator is needed.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # What this version has published already: each is skipped below,
+      # never pushed again. The revision is the tag's commit (github.sha is
+      # main's when the run is started by hand).
+      - name: What is published already
+        id: published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "revision=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo "::notice::$IMAGE:$VERSION is published already: not pushed again"
+            echo "image=true" >>"$GITHUB_OUTPUT"
+          fi
+          if helm show chart "$CHART" --version "$VERSION" >/dev/null 2>&1; then
+            echo "::notice::$CHART $VERSION is published already: not pushed again"
+            echo "chart=true" >>"$GITHUB_OUTPUT"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::the GitHub Release $TAG exists already: not made again"
+            echo "release=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      # The image, for both platforms, tagged with the version only (there
+      # is no `latest`), from the checked-out tag (context: ., not the
+      # event's git ref).
+      - name: The image
+        id: image
+        if: steps.published.outputs.image != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            REVISION=${{ steps.published.outputs.revision }}
+          tags: ${{ env.IMAGE }}:${{ env.VERSION }}
+          push: true
+      # The index digest, the one a deployment pins.
+      - if: steps.published.outputs.image != 'true'
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: echo "Pushed \`$IMAGE:$VERSION\`, index digest \`$DIGEST\`" >>"$GITHUB_STEP_SUMMARY"
+
+      # The chart, only once its image is published. helm push adds the
+      # chart's name to the reference's parent.
+      - name: The chart
+        if: steps.published.outputs.chart != 'true'
+        run: |
+          helm package charts/opamp-server --destination "$RUNNER_TEMP/chart"
+          helm push "$RUNNER_TEMP/chart/opamp-server-$VERSION.tgz" "${CHART%/opamp-server}"
+
+      # Last, so the Release page appears only once the image and the chart
+      # it announces are published.
+      - name: The binaries and the GitHub Release
+        if: steps.published.outputs.release != 'true'
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          version: v2.19.0
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ needs.version.outputs.tag }}

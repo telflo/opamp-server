@@ -1,0 +1,7 @@
+# A fixture for check-chart-cloud-neutral.test.sh: an inline annotation map.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-fixture
+  annotations: {example.invalid/inline: "yes"}
+data: {}

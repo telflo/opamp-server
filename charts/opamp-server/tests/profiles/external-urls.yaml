@@ -1,0 +1,11 @@
+# A Postgres of your own, the whole URLs read from the server's Secret.
+server:
+  publicUrl: https://opamp.example.com/opamp/api/v1
+auth:
+  existingSecret: opamp-server-credentials
+postgres:
+  enabled: false
+externalDatabase:
+  urlKeys:
+    runtime: runtime-url
+    migration: migration-url

@@ -1,0 +1,9 @@
+# A fixture for check-chart-cloud-neutral.test.sh: an annotation key built at
+# render time, which only the rendered output shows.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-fixture
+  annotations:
+    {{ printf "%s/%s" "example.invalid" "built" }}: "yes"
+data: {}

@@ -1,0 +1,50 @@
+# The release's binaries, their archives and checksums, and the GitHub
+# Release that holds them (.github/workflows/release.yml; ci.yml builds a
+# snapshot of each change). The image and the chart are published by the
+# release workflow's own steps, not here.
+version: 2
+project_name: opamp-server
+
+builds:
+  - id: opamp-server
+    main: .
+    binary: opamp-server
+    # As the Dockerfile builds it: static, no local paths, no symbol table.
+    env:
+      - CGO_ENABLED=0
+      - GOTOOLCHAIN=local
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    # The commit's time, so a rebuild of the same commit is the same file.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: [tar.gz]
+    # No version in the name: .../releases/latest/download/<name> is always
+    # the newest release's.
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    # bootstrap.sql: a standalone install runs it with psql (docs/standalone.md).
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+      - deploy/bootstrap.sql
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot+{{ .ShortCommit }}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^Merge "
+
+release:
+  prerelease: auto

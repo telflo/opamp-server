@@ -1,0 +1,25 @@
+# gitleaks reads this file from the repository's root (gitleaks dir . or
+# gitleaks git .). It keeps every default rule, and allows only the values
+# below: each is an example or a test value, never a real secret. Allow a new
+# one by its value, never by its file, so a real secret pasted beside it is
+# still found.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "compose.yaml's development encryption key (docs/security.md: compose's secrets are committed, for development only)"
+regexes = ['''HJiuKzTRLDzM3hKGOw3Lj7tluHIULWUxfZUvpPxbtrQel55NA6EhyMC3HRuP1O/y''']
+
+[[allowlists]]
+description = "The tests' secrets and keys, which name themselves, and their canaries"
+regexes = [
+  '''main-test-secret-0123456789abcdef''',
+  '''main-test-encryption-key-marker-4c1d-0123456789''',
+  '''an-older-encryption-key-marker-7a2e-0123456789''',
+  '''serve-test-encryption-key-0123456789abcde''',
+  '''serve-test-previous-key-0123456789abcdefg''',
+  '''a-previous-encryption-key-0123456789abcdef''',
+  '''an-older-encryption-key-0123456789abcdef-xyz''',
+  '''previous-key-canary-2b7e-0123456789abcdef01234567''',
+]

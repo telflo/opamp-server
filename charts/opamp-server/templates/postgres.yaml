@@ -1,0 +1,188 @@
+{{- include "opamp-server.guards" . }}
+{{- if .Values.postgres.enabled }}
+{{- $pg := .Values.postgres }}
+{{- $name := include "opamp-server.postgresName" . }}
+{{- $secret := include "opamp-server.secretName" . }}
+{{- /*
+The bundled Postgres. Its container is the only place the superuser's
+password exists. It also holds the owner's and the runtime role's passwords,
+for the bootstrap, which the image's entrypoint runs once, when it creates
+the data directory (initdb.sh, from the bootstrap ConfigMap).
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name | quote }}
+  labels:
+    {{- include "opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+spec:
+  # Headless: a DNS name resolving straight to the pod, which the StatefulSet
+  # also names its pod by.
+  clusterIP: None
+  selector:
+    {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name | quote }}
+  labels:
+    {{- include "opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+spec:
+  serviceName: {{ $name | quote }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 8 }}
+      {{- with $pg.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        # 999 is the postgres user and group inside the postgres image.
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: {{ include "opamp-server.imageRef" (list $pg.image "18") | quote }}
+          imagePullPolicy: {{ $pg.image.pullPolicy | quote }}
+          # The first-start guard. A bootstrap that fails on the first start
+          # is never run again (the data directory exists by then), leaving a
+          # Postgres without the server's roles. So both passwords are checked
+          # before the image's entrypoint runs at all: set, non-empty and
+          # URL-safe (the chart puts them in database URLs). Otherwise it
+          # exits 1 with a fixed message, and the volume stays empty.
+          command:
+            - sh
+            - -c
+            - |
+              url_safe() { case "$1" in "" | *[!A-Za-z0-9._~-]*) return 1 ;; esac; }
+              if url_safe "${OPAMP_OWNER_PASSWORD-}" && url_safe "${OPAMP_RUNTIME_PASSWORD-}"; then
+                exec docker-entrypoint.sh postgres
+              fi
+              echo "opamp-server: owner-password and runtime-password must be set, non-empty and URL-safe (only A-Z a-z 0-9 . _ ~ -); Postgres was not started" >&2
+              exit 1
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pg.auth.existingSecret | quote }}
+                  key: postgres-password
+            - name: OPAMP_OWNER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret | quote }}
+                  key: owner-password
+            - name: OPAMP_RUNTIME_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret | quote }}
+                  key: runtime-password
+            - name: OPAMP_DATABASE_NAME
+              value: {{ include "opamp-server.envLiteral" $pg.database }}
+          # Ready once Postgres answers on TCP: while the entrypoint creates
+          # the data directory its temporary server listens on a Unix socket
+          # only.
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-p", "5432", "-U", "postgres", "-d", "postgres"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-p", "5432", "-U", "postgres", "-d", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            # Postgres 18's image keeps its data in /var/lib/postgresql/18/docker.
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            # initdb.sh alone in the entrypoint's folder: bootstrap.sql there
+            # would be run a second time, as a *.sql file.
+            - name: bootstrap-initdb
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: bootstrap-sql
+              mountPath: /opamp-bootstrap
+              readOnly: true
+          {{- with $pg.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- include "opamp-server.containerSecurityContext" 999 | nindent 12 }}
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: bootstrap-initdb
+          configMap:
+            name: {{ include "opamp-server.bootstrapName" . | quote }}
+            items:
+              - key: initdb.sh
+                path: initdb.sh
+                mode: 0555
+        - name: bootstrap-sql
+          configMap:
+            name: {{ include "opamp-server.bootstrapName" . | quote }}
+            items:
+              - key: bootstrap.sql
+                path: bootstrap.sql
+                mode: 0444
+      {{- with $pg.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $pg.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $pg.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $pg.persistence.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $pg.persistence.size | quote }}
+{{- end }}

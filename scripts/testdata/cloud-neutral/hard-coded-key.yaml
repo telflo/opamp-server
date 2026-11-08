@@ -1,0 +1,9 @@
+# A fixture for check-chart-cloud-neutral.test.sh: a template writing an
+# annotation key itself (no cloud marker: the key alone is the fault).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-fixture
+  annotations:
+    example.invalid/hard-coded: "yes"
+data: {}

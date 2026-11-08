@@ -1,0 +1,140 @@
+# Every optional part on: the previous encryption keys, TLS on both listeners, a LoadBalancer agent
+# Service, the NetworkPolicies, a PodDisruptionBudget for each component,
+# several replicas of each, resources of each, pull secrets, the tunables,
+# telemetry, extra variables and scheduling.
+fullnameOverride: opamp
+image:
+  tag: 0.1.0
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+  pullPolicy: Always
+imagePullSecrets:
+  - name: registry-pull
+terminationGracePeriodSeconds: 60
+auth:
+  existingSecret: opamp-server-credentials
+  encryptionKeysPrevious:
+    enabled: true
+server:
+  publicUrl: https://opamp.example.com/opamp/api/v1
+  agent:
+    replicas: 3
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 2
+      maxUnavailable: null
+    tls:
+      secretName: agent-tls-certificate
+  management:
+    replicas: 2
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+    podDisruptionBudget:
+      enabled: true
+    tls:
+      secretName: management-tls-certificate
+  heartbeatIntervalSeconds: 60
+  defaultRequestsPerMinute: 24000
+  collectorRequestsPerMinute: 120
+  maxConcurrentRequests: 200
+  maxConcurrentRequestsPerOrganization: 50
+  shutdownDrainSeconds: 10
+  telemetry:
+    otlpEndpoint: http://otel-collector.observability.svc:4317
+    serviceName: opamp-server
+    resourceAttributes: deployment.environment=test
+extraEnv:
+  - name: EXAMPLE_PLAIN
+    value: plain
+  - name: EXAMPLE_FROM_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: example-extra
+        key: example-key
+podAnnotations:
+  example.com/team: fleet
+podLabels:
+  example.com/tier: backend
+nodeSelector:
+  kubernetes.io/os: linux
+tolerations:
+  - key: example.com/dedicated
+    operator: Equal
+    value: opamp
+    effect: NoSchedule
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: opamp-server
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: opamp-server
+priorityClassName: example-high
+serviceAccount:
+  create: true
+  name: opamp-sa
+  annotations:
+    example.com/purpose: opamp
+service:
+  agent:
+    type: LoadBalancer
+    port: 443
+    nodePort: 31234
+    loadBalancerSourceRanges:
+      - 10.0.0.0/8
+    annotations:
+      example.com/load-balancer: public
+  management:
+    annotations:
+      example.com/scrape: "false"
+networkPolicy:
+  enabled: true
+  management:
+    from:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: management-client
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: platform
+postgres:
+  image:
+    pullPolicy: Always
+  auth:
+    existingSecret: opamp-postgres-credentials
+  database: opamp_db
+  persistence:
+    size: 20Gi
+    storageClassName: fast
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  podAnnotations:
+    example.com/backup: daily
+  nodeSelector:
+    kubernetes.io/os: linux
+  tolerations:
+    - key: example.com/dedicated
+      operator: Equal
+      value: database
+      effect: NoSchedule
+  affinity: {}

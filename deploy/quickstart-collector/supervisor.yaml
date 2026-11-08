@@ -1,0 +1,34 @@
+# The quick start collector's supervisor. Every value that differs between
+# installs comes from the environment, which compose.yaml's `collector`
+# service, or kubernetes.yaml, sets:
+#
+#   OPAMP_ENDPOINT      the agent endpoint
+#   OPAMP_TOKEN         the fleet's default token's bearer
+#   COLLECTOR_GROUP_ID  the collector group it joins
+server:
+  endpoint: ${env:OPAMP_ENDPOINT}
+  headers:
+    Authorization: "Bearer ${env:OPAMP_TOKEN}"
+  tls:
+    insecure: true                  # the quick start speaks plain HTTP
+
+capabilities:
+  accepts_remote_config: true
+  reports_effective_config: true
+  reports_health: true
+  accepts_opamp_connection_settings: true
+
+agent:
+  executable: /otelcol-contrib
+  # The collector's own log lines go to the container's output too.
+  passthrough_logs: true
+  description:
+    non_identifying_attributes:
+      # Required: the group this collector joins. The server refuses a
+      # collector without it.
+      telflo.collector_group_id: ${env:COLLECTOR_GROUP_ID}
+
+storage:
+  # Its instance id and the last configuration it was sent: a volume, so a
+  # restart is the same collector.
+  directory: /var/lib/opampsupervisor

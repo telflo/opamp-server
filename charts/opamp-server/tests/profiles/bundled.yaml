@@ -1,0 +1,8 @@
+# The defaults, with only what an install must name: the bundled Postgres.
+server:
+  publicUrl: https://opamp.example.com/opamp/api/v1
+auth:
+  existingSecret: opamp-server-credentials
+postgres:
+  auth:
+    existingSecret: opamp-postgres-credentials

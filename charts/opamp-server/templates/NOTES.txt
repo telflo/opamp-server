@@ -1,0 +1,24 @@
+{{- $fullname := include "opamp-server.fullname" . -}}
+{{ .Chart.Name }} {{ .Chart.Version }} is installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Two Deployments run the same image on the same database, each on its own:
+  {{ $fullname }}-agent        `serve agent`, {{ .Values.server.agent.replicas }} replica(s): the endpoint collectors poll. It holds no management secret.
+  {{ $fullname }}-management   `serve management`, {{ .Values.server.management.replicas }} replica(s): the management API.
+
+Watch the pods start{{ if .Values.postgres.enabled }} (Postgres first: the server's pods wait for it, then migrate){{ end }}:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }} -w
+
+The agent endpoint (where collectors poll; they are handed the URL in server.publicUrl):
+  Service {{ $fullname }}-agent, port {{ .Values.service.agent.port }} ({{ .Values.service.agent.type }}).
+  /health and /ready answer on this port; the kubelet probes them on the pod. Keep /ready off a
+  public load balancer's health check, which should check the port alone.
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ $fullname }}-agent 51234:{{ .Values.service.agent.port }}
+  curl -s{{ if .Values.server.agent.tls.secretName }}k https{{ else }} http{{ end }}://127.0.0.1:51234/ready
+
+The management API (behind the shared secret; ClusterIP only, never exposed by this chart):
+  Service {{ $fullname }}-management, port 51235. /health and /ready answer on this port.
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ $fullname }}-management 51235:51235
+  curl -s{{ if .Values.server.management.tls.secretName }}k https{{ else }} http{{ end }}://127.0.0.1:51235/health
+
+A changed Secret reaches the pods only when they restart:
+  kubectl -n {{ .Release.Namespace }} rollout restart deployment/{{ $fullname }}-agent deployment/{{ $fullname }}-management

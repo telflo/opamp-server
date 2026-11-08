@@ -1,0 +1,25 @@
+name: Feature request
+description: Something opamp-server doesn't do that you need.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The README's "What it doesn't do" lists what's deliberately left out; say if your request is one of those.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you're trying to do, and what stops you today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+      description: How you'd like it to work, from the API or the chart.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you've tried
+      description: Workarounds, or other tools that do it.

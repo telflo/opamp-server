@@ -1,0 +1,11 @@
+Token compatibility fixtures: they show this server reads bearers made by
+an independent WebCrypto implementation of the format, and the reverse.
+Made once on 2026-10-12. fixture-key.txt is the key setting both were made
+with, a non-ASCII test key that is no secret (no trailing newline).
+node-bearer.txt was made under Node's WebCrypto for token_id
+11111111-2222-4333-8444-555555555555 and deployment_id
+66666666-7777-4888-9999-000000000000. go-bearer.txt was made by this
+server's Go (the same algorithm as tokens.Seal) for token_id
+aaaaaaaa-2222-4333-8444-555555555555 and deployment_id
+bbbbbbbb-7777-4888-9999-000000000000, and decrypted by the same WebCrypto
+derivation under Node at the time.

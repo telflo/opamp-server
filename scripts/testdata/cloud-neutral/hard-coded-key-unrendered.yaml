@@ -1,0 +1,11 @@
+# A fixture for check-chart-cloud-neutral.test.sh: a hard-coded annotation key
+# in a branch no profile renders, which only the templates' text shows.
+{{- if .Values.fixtureNeverSet }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-fixture
+  annotations:
+    example.invalid/unrendered: "yes"
+data: {}
+{{- end }}

@@ -1,0 +1,11 @@
+# A fixture profile for check-chart-cloud-neutral.test.sh: a cloud's storage
+# class, only in the rendered output.
+server:
+  publicUrl: https://opamp.example.com/opamp/api/v1
+auth:
+  existingSecret: opamp-server-credentials
+postgres:
+  auth:
+    existingSecret: opamp-postgres-credentials
+  persistence:
+    storageClassName: managed-csi

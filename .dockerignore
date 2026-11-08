@@ -1,0 +1,43 @@
+# Keep the build context to what `go build .` needs: nothing local, secret
+# or test-only.
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.vscode
+.claude
+.DS_Store
+**/.DS_Store
+
+# A local `go build` writes the binary here (12MB, would bloat the context).
+opamp-server
+
+# The Quick start's credentials.
+.quickstart/
+
+# Docs, and the licence and bootstrap checks with their fixture modules:
+# none of them is built into the image.
+docs/
+scripts/
+# Markdown anywhere (README.md, CONTRIBUTING.md, cmd/loadtest/README.md…):
+# no Go file embeds any.
+*.md
+**/*.md
+
+# The chart, the Makefile and its fragments, the gates' reports
+# (`make check` writes .check/), compose.yaml and deploy/ (bootstrap.sql,
+# which a superuser runs with psql): none of them is built into the image.
+charts/
+mk/
+Makefile
+.check/
+compose.yaml
+deploy/
+
+# Tests and test fixtures: not needed in the runtime image.
+**/*_test.go
+**/testdata/
+
+# GoReleaser's output: the binaries and their archives.
+dist/

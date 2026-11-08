@@ -1,0 +1,87 @@
+# The quick start's collector on Kubernetes: the same image and supervisor
+# configuration as compose.yaml's `collector` service, for a cluster that
+# runs the chart. Never a deployment manifest: it's a demo client, with its
+# image built on the cluster's node and never pulled.
+#
+# It runs in the chart's namespace and reaches the agent endpoint through
+# the chart's agent Service; the names below assume the README's
+# `helm install opamp … -n opamp`. Before applying it:
+#
+#   minikube image build -t opamp-quickstart-collector:dev deploy/quickstart-collector
+#   kubectl -n opamp create secret generic quickstart-collector --from-env-file=collector.env
+#
+# where collector.env holds OPAMP_TOKEN (the fleet's default token's bearer)
+# and COLLECTOR_GROUP_ID (the group it joins), one NAME=value per line.
+#
+# The server hands the collector server.publicUrl to poll from then on, so
+# the chart's publicUrl must be one the pod can reach.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: quickstart-collector
+  labels:
+    app.kubernetes.io/name: quickstart-collector
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quickstart-collector
+  labels:
+    app.kubernetes.io/name: quickstart-collector
+spec:
+  replicas: 1
+  # One pod at a time: the volume is ReadWriteOnce, and two supervisors on
+  # one state directory would be one collector reporting twice.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: quickstart-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: quickstart-collector
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        # The contrib image's user, which owns the state directory.
+        runAsUser: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: collector
+          image: opamp-quickstart-collector:dev
+          imagePullPolicy: Never
+          env:
+            - name: OPAMP_ENDPOINT
+              value: http://opamp-opamp-server-agent.opamp.svc:51234/opamp/api/v1
+          envFrom:
+            - secretRef:
+                name: quickstart-collector
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            # Its instance id and the last configuration it was sent: a
+            # volume, so a restart is the same collector.
+            - name: state
+              mountPath: /var/lib/opampsupervisor
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: quickstart-collector

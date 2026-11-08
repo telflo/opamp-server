@@ -1,0 +1,3 @@
+# A fixture line for check-chart-cloud-neutral.test.sh, appended to values.yaml
+# as a comment, so it is in the packaged file but never rendered:
+# storageClassName: gp3

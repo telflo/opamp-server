@@ -1,0 +1,8 @@
+# A fixture for check-chart-cloud-neutral.test.sh: a template holding a cloud
+# marker (an identity's ARN), which renders it too.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-fixture
+data:
+  role: "arn:aws:iam::000000000000:role/fixture"

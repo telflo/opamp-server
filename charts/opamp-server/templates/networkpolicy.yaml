@@ -1,0 +1,72 @@
+{{- include "opamp-server.guards" . }}
+{{- if .Values.networkPolicy.enabled }}
+{{- /*
+The agent endpoint's pods: its port from anywhere.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-agent" (include "opamp-server.fullname" .) | quote }}
+  labels:
+    {{- include "opamp-server.labels" (dict "ctx" . "component" "agent") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "agent") | nindent 6 }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - ports:
+        - port: 51234
+          protocol: TCP
+---
+{{- /*
+The management API's pods: its port only from networkPolicy.management.from.
+With none listed, no rule is rendered at all, so nothing reaches them (a rule
+with an empty `from` would admit every source).
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-management" (include "opamp-server.fullname" .) | quote }}
+  labels:
+    {{- include "opamp-server.labels" (dict "ctx" . "component" "management") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "management") | nindent 6 }}
+  policyTypes: ["Ingress"]
+  {{- with .Values.networkPolicy.management.from }}
+  ingress:
+    - from:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - port: 51235
+          protocol: TCP
+  {{- end }}
+{{- if .Values.postgres.enabled }}
+---
+{{- /* The bundled Postgres: only from the two components' pods. */}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opamp-server.postgresName" . | quote }}
+  labels:
+    {{- include "opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 6 }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "agent") | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "management") | nindent 14 }}
+      ports:
+        - port: 5432
+          protocol: TCP
+{{- end }}
+{{- end }}

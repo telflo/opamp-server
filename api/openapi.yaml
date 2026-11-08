@@ -1,0 +1,4356 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: opamp-server management API
+  version: 1.0.0
+  description: |
+    The opamp-server's management API: how the platform, and self-hosters
+    of the open-source server, register organizations, store and read their
+    publications, and manage their fleets, collector groups, enrollment
+    tokens, collectors and limits, and their organization variables and
+    variable groups.
+    Collectors never call it; the OpAMP agent side has its own port.
+
+    - It listens on its own port (`OPAMP_MANAGEMENT_PORT`, default 51235),
+      which is never exposed to the internet.
+    - Every route under `/api/` needs `Authorization: Bearer <credential>`:
+      the shared secret in `OPAMP_MANAGEMENT_SECRET` (or one of
+      `OPAMP_MANAGEMENT_SECRETS_PREVIOUS` during a rotation), or an API key
+      the secret's holder minted (`POST /api/v1/api-keys`) that is neither
+      revoked nor expired. Without one, every request under `/api/`,
+      whatever its path, answers the same 401.
+    - An API key opens the routes under
+      `/api/v1/organizations/{organizationId}/` of the organizations it
+      names, or of every organization; under another organization each
+      answers the same 404 `organization_not_found` as an organization that
+      isn't registered, once its path ids are read. Registering an
+      organization takes a key for every organization (403 `forbidden`
+      otherwise), and the API key routes take the secret only (403
+      `forbidden`).
+    - The organization is an opaque tenant key the caller supplies, and it
+      must be **registered first** (`POST /api/v1/organizations`). Every
+      publication and fleet route is under
+      `/api/v1/organizations/{organizationId}/`; under an organization that
+      isn't registered, each answers 404 `organization_not_found` once its
+      path ids are read, before anything else is checked or read. Nothing
+      crosses organizations: another organization's publication answers a
+      plain 404 `not_found` (or a 409 for a `POST` of its id), and another
+      organization's fleet, group, token, collector, variable or variable
+      group the same 404 as one that doesn't exist (`fleet_not_found`,
+      `collector_group_not_found`, `enrollment_token_not_found`,
+      `collector_not_found`, `variable_not_found`,
+      `variable_group_not_found`); so is another fleet's group, token or
+      collector, even the organization's. Deleting an organization deletes
+      everything it owns.
+    - An enrollment token's bearer is a secret: it is answered only by a
+      fleet's create, a rotation and a reveal, each with `Cache-Control:
+      no-store` so no proxy or client cache keeps it, and never logged.
+    - Configuration text is answered only where it is documented: a
+      publication's YAML by its read, a collector's reported attributes
+      and its effective configuration's error by the collector routes, and
+      an organization's variables' names, values and descriptions and its
+      variable groups' names and descriptions by the variable and variable
+      group routes (there are no secret variables: secrets stay
+      `${env:NAME}`, set at install). None is ever logged.
+    - A request body is at most 2 MiB (2,097,152 bytes), or the answer is 413.
+    - After authentication, a request no route here matches, by path or by
+      method, answers 404 `not_found`.
+    - Every error answers the envelope `{"error": {"code", "message"}}`. A
+      message names the field at fault, never its value. Three codes
+      (`variable_in_use`, `variable_group_in_use`, `variables_undefined`)
+      also carry `details`: ids, counts and variable names, at most 100
+      listed with exact totals, never a value; their messages stay fixed.
+    - Times are RFC 3339. They are kept to the millisecond (anything finer
+      is dropped on input), and replies give them in UTC with milliseconds,
+      so a reply's time sent back is the same instant.
+    - Characters are Unicode code points; no string may contain U+0000.
+
+    This file is the contract: the server's conformance test sends every
+    documented request through the real handler and validates each request
+    and reply against it, and the platform's test double validates against
+    it too.
+servers:
+  - url: http://localhost:51235
+    description: A development server (the compose stack publishes the port).
+security:
+  - bearerAuth: []
+tags:
+  - name: organizations
+    description: The registry of organizations, registered before anything is stored under them.
+  - name: publications
+    description: Immutable, self-describing snapshots of a configuration version.
+  - name: fleets
+    description: Fleets of collectors that enroll with the same tokens and are managed together.
+  - name: collector groups
+    description: A fleet's groups, each served its assigned published version.
+  - name: enrollment tokens
+    description: A fleet's credentials for its collectors, minted, rotated, revealed and revoked here.
+  - name: collectors
+    description: A fleet's collectors (collector instances), each enrolled on its first poll.
+  - name: limits
+    description: An organization's collector cap and agent request rate.
+  - name: variables
+    description: An organization's variables, filled in for each `${org:NAME}` a collector's configuration references.
+  - name: variable groups
+    description: An organization's variable groups, each holding overrides that a collector group or a pinned collector uses.
+  - name: api keys
+    description: The management API's keys, minted and revoked by the secret's holder.
+  - name: health
+    description: Liveness and readiness.
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [health]
+      summary: Liveness.
+      description: Answers 200 `ok` without the secret and without touching the database.
+      security: []
+      responses:
+        "200":
+          description: The server is up.
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: ok
+  /ready:
+    get:
+      operationId: getReady
+      tags: [health]
+      summary: Readiness.
+      description: |
+        Answers 200 `ready` once the server is serving and its database
+        answers a ping within 2 seconds; 503 `not ready` while it starts,
+        once it is told to stop (while it drains), or while the database
+        doesn't answer. No secret. One ping is in flight at a time and its
+        answer is kept a second, so probes never queue on the database.
+      security: []
+      responses:
+        "200":
+          description: The server is ready for requests.
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: "ready\n"
+        "503":
+          description: The server is starting, draining, or can't reach its database.
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: "not ready\n"
+  /api/v1/organizations:
+    post:
+      operationId: createOrganization
+      tags: [organizations]
+      summary: Register an organization.
+      description: |
+        With an `id`, registers it under that id; without one, the server
+        generates one. A create never renames. The id not yet registered:
+        201. The id already registered with exactly this `name` (compared
+        character for character, as sent): 200 and nothing changes, so a
+        retry is safe. The id registered with another name: 409, saying
+        nothing more about it (rename with `PATCH`). A POST without an `id`
+        can't be safely retried: each one registers a new organization.
+
+        The `name` is kept exactly as sent, surrounding whitespace included.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationCreateRequest"
+      responses:
+        "200":
+          description: The id was already registered with this name; nothing changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationIdReply"
+        "201":
+          description: Registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationIdReply"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: An API key limited to some organizations can't register one.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: forbidden
+                  message: Registering an organization takes the management secret, or an API key for every organization.
+        "409":
+          description: The id is registered with another name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: organization_conflict
+                  message: An organization with this id is already registered under another name.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+    get:
+      operationId: getOrganization
+      tags: [organizations]
+      summary: Read an organization.
+      responses:
+        "200":
+          description: The organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: renameOrganization
+      tags: [organizations]
+      summary: Rename an organization.
+      description: |
+        Sets its `name`, and `updatedAt` to now. Renaming it to the name it
+        has changes nothing, `updatedAt` included.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationRenameRequest"
+      responses:
+        "200":
+          description: The organization, renamed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteOrganization
+      tags: [organizations]
+      summary: Delete an organization and everything it owns (a hard delete).
+      description: |
+        Everything the organization owns goes with it: its fleets, their
+        groups, collectors, enrollment tokens and the tokens' events, the
+        collectors' error history, and the organization's published
+        versions. Registering the id again starts an empty organization. A
+        poll changing one of its collectors at the same moment is waited
+        for, never a reason to fail.
+
+        Once started, the delete completes even if the caller goes away
+        (within 5 minutes of its own; only the server's stop cuts it off,
+        and then nothing is deleted). A caller that hung up or timed out
+        retries: the retry answers 404 once the delete is done, which means
+        deleted. While this server is still running the same delete, a
+        retry answers 503 `delete_in_progress` at once rather than waiting
+        for it (a retry reaching another replica waits for it instead).
+      responses:
+        "204":
+          description: Deleted, with everything it owned.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/DeleteInProgress"
+  /api/v1/organizations/{organizationId}/publications/{publicationId}:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/publicationId"
+    get:
+      operationId: getPublication
+      tags: [publications]
+      summary: Read a publication, with its YAML.
+      responses:
+        "200":
+          description: The publication, its YAML exactly as it was put.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Publication"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/PublicationNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deletePublication
+      tags: [publications]
+      summary: Delete a publication (a hard delete).
+      description: |
+        A published version a collector group is assigned, or a collector is
+        pinned to, isn't deleted: 409 `publication_in_use`, deleting nothing
+        (`…/configurations/{configurationId}/usage` says what uses it).
+      responses:
+        "204":
+          description: Deleted.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/PublicationNotFound"
+        "409":
+          description: A collector group or a collector uses the published version; nothing was deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: publication_in_use
+                  message: A collector group or a collector uses this published version.
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/publications:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+    post:
+      operationId: postPublication
+      tags: [publications]
+      summary: Store a publication, under the caller's id or one the server makes.
+      description: |
+        With an `id` in the body, idempotent by that id. An id no publication
+        has: stored, 201. The same id again, in the same organization, with an
+        identical body (every field, `collector` included, `publishedAt`
+        compared as an instant at millisecond precision): nothing changes, 200
+        with the stored publication (its `receivedAt` is the first `POST`'s).
+        The same id with anything different, or an id another organization
+        holds: 409, saying nothing about the stored row.
+
+        Without an `id`, the server makes one, which the reply's `id` holds:
+        201. Every such call stores a new publication, so a retry after a lost
+        reply stores a second one. A caller that retries sends its own `id`.
+
+        The organization must be registered (404 `organization_not_found`,
+        before the body is read). The body is checked field by field (400),
+        then `sha256` against `yaml` (422). `yaml` is at most 1 MiB of UTF-8 (1,048,576 bytes; the
+        schema's `maxLength` counts characters, so it is looser for
+        multi-byte text). `version.number` is at most 2,147,483,647.
+
+        After the 422, a `yaml` with a live `${org:NAME}` reference to a name
+        over 128 characters, which no variable can have, is refused: 400
+        `invalid_request` naming `yaml`, never the name.
+        References to names no variable has yet are stored: publishing stays
+        allowed, and assigning or pinning such a version is refused (422
+        `variables_undefined`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicationRequest"
+      responses:
+        "200":
+          description: An identical publication was already stored under this id; nothing changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Publication"
+        "201":
+          description: Stored, under the id in the reply.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Publication"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "409":
+          description: The id is taken by a different publication, or by another organization's.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: publication_conflict
+                  message: A different publication already has this id.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          description: "`sha256` isn't the SHA-256 of `yaml`'s UTF-8 bytes."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: sha256_mismatch
+                  message: sha256 isn't the SHA-256 of yaml's UTF-8 bytes.
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      operationId: listPublications
+      tags: [publications]
+      summary: List a configuration's publications, newest first, without their YAML.
+      description: |
+        Ordered by `publishedAt`, then by id, both descending. Pages by
+        keyset: pass a reply's `nextCursor` as `cursor` for the next page;
+        it is null on the last one. Each parameter may be given once. The
+        organization must be registered (404 `organization_not_found`, before
+        the query is read).
+      parameters:
+        - name: configurationId
+          in: query
+          required: true
+          description: The configuration whose publications to list.
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: limit
+          in: query
+          required: false
+          description: The page's size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          description: An opaque `nextCursor` from an earlier page of the same list.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicationList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/configurations/{configurationId}/publications:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - name: configurationId
+        in: path
+        required: true
+        description: The configuration whose publications to delete.
+        schema:
+          $ref: "#/components/schemas/Uuid"
+    delete:
+      operationId: deleteConfigurationPublications
+      tags: [publications]
+      summary: Delete every publication of a configuration (a hard delete).
+      description: |
+        Answers 204 whether or not any existed, once the organization is
+        registered (else 404 `organization_not_found`). Other organizations'
+        publications are untouched. While a collector group or a collector
+        uses any of the configuration's published versions, none is deleted:
+        409 `publication_in_use` (`…/configurations/{configurationId}/usage`
+        says what uses them).
+      responses:
+        "204":
+          description: Deleted, or there were none.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "409":
+          description: A collector group or a collector uses one of the published versions; nothing was deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: publication_in_use
+                  message: A collector group or a collector uses one of the configuration's published versions.
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/configurations/{configurationId}/usage:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - name: configurationId
+        in: path
+        required: true
+        description: The configuration whose published versions' use to read.
+        schema:
+          $ref: "#/components/schemas/Uuid"
+    get:
+      operationId: getConfigurationUsage
+      tags: [publications]
+      summary: What uses each of a configuration's published versions.
+      description: |
+        Each of the organization's published versions of the configuration,
+        newest first (by `publishedAt`, then id, both descending), with the
+        collector groups assigned it (by fleet, then group) and how many
+        collectors are pinned to it. `inUse` is whether any is used: while
+        one is, deleting it, or the configuration's, answers 409
+        `publication_in_use`. A configuration with no published version
+        answers an empty list. The organization must be registered (404
+        `organization_not_found`).
+      responses:
+        "200":
+          description: The configuration's published versions and what uses each.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigurationUsage"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/limits:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+    get:
+      operationId: getLimits
+      tags: [limits]
+      summary: Read the organization's limits.
+      responses:
+        "200":
+          description: The organization's limits; null for one unset.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationLimits"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      operationId: setLimits
+      tags: [limits]
+      summary: Set the organization's limits, both of them.
+      description: |
+        `maxCollectors` is the most collectors the organization may have
+        enrolled (null: no cap); an enrollment past it is refused, and a cap
+        below the collectors already enrolled removes none of them.
+        `requestsPerMinute` is the agent requests a minute it may make to
+        each opamp-server pod (null: the server's default). Both fields are
+        required; send null to unset one.
+
+        Each pod reads `requestsPerMinute` through a cache of 10 seconds, so
+        a new rate reaches every pod within 10 s, not at once.
+        `maxCollectors` is read by each enrollment, in its transaction, so a
+        new cap (`0` included) holds from the next enrollment on.
+
+        The limits keep one organization from taking the agent pods its
+        neighbours share, so setting them takes the management secret, or
+        an API key for every organization: a key for some organizations,
+        this one included, is answered 403. Any key for the organization
+        can read them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationLimits"
+      responses:
+        "200":
+          description: The limits, as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationLimits"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: An API key limited to some organizations can't set an organization's limits.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: forbidden
+                  message: Changing an organization's limits takes the management secret, or an API key for every organization.
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+    post:
+      operationId: createFleet
+      tags: [fleets]
+      summary: Create a fleet, with its Default group and its two enrollment tokens.
+      description: |
+        One transaction makes the fleet (`active`), its Default group (named
+        "Default", nothing assigned), its default token (never expires) and
+        its rotate token (expiring at `rotateExpiresAt`, or never when null),
+        and an `issued` event for each token, naming `actor`. The reply is
+        the only one that carries both tokens' bearers; each bearer can be
+        revealed again later (`…/tokens/{tokenId}/reveal`), freshly
+        encrypted.
+
+        With an `id`: the organization already holding a fleet with this id,
+        `label` and `type` answers 200 with the fleet and no bearer, changing
+        nothing (a safe retry); the id held otherwise, by this organization or
+        another, answers 409 `fleet_conflict`. Without an `id`, the server
+        makes one, so such a POST can't be safely retried. A label another
+        of the organization's fleets has answers 409 `fleet_label_taken`
+        (labels are compared as written, case-sensitively).
+
+        The organization must be registered (404 `organization_not_found`,
+        before the body is read). `rotateExpiresAt`, when not null, must be
+        in the future (400).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FleetCreateRequest"
+      responses:
+        "200":
+          description: The organization already holds this fleet, with this label and type; nothing changed, and no bearer is answered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FleetUnchanged"
+        "201":
+          description: Created, with its Default group and both tokens' bearers.
+          headers:
+            Cache-Control:
+              description: The reply carries a bearer, which no proxy or client cache may keep.
+              required: true
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FleetCreated"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "409":
+          description: The id is taken by a different fleet, or by another organization's (`fleet_conflict`); or another of the organization's fleets has the label (`fleet_label_taken`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                fleetConflict:
+                  value:
+                    error:
+                      code: fleet_conflict
+                      message: A different fleet already has this id.
+                fleetLabelTaken:
+                  value:
+                    error:
+                      code: fleet_label_taken
+                      message: Another of the organization's fleets has this label.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      operationId: listFleets
+      tags: [fleets]
+      summary: List the organization's fleets, newest first.
+      description: |
+        Ordered by `createdAt`, then by id, both descending. Pages by keyset:
+        pass a reply's `nextCursor` as `cursor` for the next page; it is null
+        on the last one. Each parameter may be given once. The organization
+        must be registered (404 `organization_not_found`, before the query is
+        read). Each fleet carries its summary: its collectors counted by
+        liveness and by sync, at the server's clock (as a collector's own
+        `liveness` and `sync`).
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Only the fleets with this status.
+          schema:
+            $ref: "#/components/schemas/FleetStatus"
+        - name: limit
+          in: query
+          required: false
+          description: The page's size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          description: An opaque `nextCursor` from an earlier page of the same list.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FleetList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+    get:
+      operationId: getFleet
+      tags: [fleets]
+      summary: Read a fleet, with its summary.
+      responses:
+        "200":
+          description: The fleet, with its collectors counted by liveness and by sync.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FleetDetail"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateFleet
+      tags: [fleets]
+      summary: Rename a fleet, or archive or unarchive it.
+      description: |
+        Sets each field given; at least one. `updatedAt` moves only when
+        something changes. An archived fleet's collectors are refused by the
+        agent endpoint and its tokens can't be rotated; it can be
+        unarchived. A fleet's type never changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FleetUpdateRequest"
+      responses:
+        "200":
+          description: The fleet, updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Fleet"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "409":
+          description: Another of the organization's fleets has the label.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: fleet_label_taken
+                  message: Another of the organization's fleets has this label.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteFleet
+      tags: [fleets]
+      summary: Delete a fleet and everything it holds (a hard delete).
+      description: |
+        Its groups, enrollment tokens and their events, and its collectors
+        go with it, which frees the collectors' places under the
+        organization's cap. Its collectors' next polls are refused.
+
+        Once started, the delete completes even if the caller goes away
+        (within 5 minutes of its own; only the server's stop cuts it off,
+        and then nothing is deleted). A caller that hung up or timed out
+        retries: the retry answers 404 `fleet_not_found` once the delete is
+        done, which means deleted. While this server is still running the
+        same delete, or its organization's, a retry answers 503
+        `delete_in_progress` at once rather than waiting for it (a retry
+        reaching another replica waits for it instead).
+      responses:
+        "204":
+          description: Deleted, with everything it held.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/DeleteInProgress"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/groups:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+    get:
+      operationId: listCollectorGroups
+      tags: [collector groups]
+      summary: List a fleet's collector groups, the Default group first.
+      description: Then by name (compared as bytes) and id.
+      responses:
+        "200":
+          description: Every group of the fleet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorGroupList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createCollectorGroup
+      tags: [collector groups]
+      summary: Create a collector group in a fleet.
+      description: |
+        `name` is unique within the fleet ("Default" is the Default
+        group's). `assignedPublicationId` names a published version of the
+        organization's, served to the group's collectors without a pin of
+        their own; one the organization doesn't hold answers 422
+        `publication_not_found`, and one referencing `${org:NAME}` names no
+        variable of the organization has answers 422 `variables_undefined`
+        with the names. `variableGroupId` names a variable group of the
+        organization's that its collectors' text is filled in with, under
+        their pin's (one it doesn't hold: 422 `variable_group_not_found`).
+        `annotations`, the client's own data, is allowed on any fleet's
+        group. Absent and null are the same: unset.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectorGroupCreateRequest"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorGroup"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "409":
+          description: Another of the fleet's groups has the name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: collector_group_name_taken
+                  message: Another of the fleet's collector groups has this name.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/GroupAssignmentRefused"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/groups/{groupId}:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+      - $ref: "#/components/parameters/groupId"
+    get:
+      operationId: getCollectorGroup
+      tags: [collector groups]
+      summary: Read a collector group.
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorGroup"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/CollectorGroupNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateCollectorGroup
+      tags: [collector groups]
+      summary: Rename a collector group, assign it a published version, or set its annotations.
+      description: |
+        Sets each field given; at least one. Null clears a field (not the
+        name). `updatedAt` moves only when something changes. The Default
+        group keeps its name (409 `collector_group_is_default`). The rules of
+        the create hold: a name the fleet's other groups have is a 409; a
+        published version or a variable group the organization doesn't hold
+        a 422; a newly assigned published version referencing names no
+        variable has a 422 `variables_undefined` (a change of the variable
+        group alone checks nothing: "defined" means an organization
+        variable). An `annotations` object replaces the group's annotations
+        whole.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectorGroupUpdateRequest"
+      responses:
+        "200":
+          description: The group, updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorGroup"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/CollectorGroupNotFound"
+        "409":
+          description: Another of the fleet's groups has the name (`collector_group_name_taken`), or the Default group would be renamed (`collector_group_is_default`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                nameTaken:
+                  value:
+                    error:
+                      code: collector_group_name_taken
+                      message: Another of the fleet's collector groups has this name.
+                isDefault:
+                  value:
+                    error:
+                      code: collector_group_is_default
+                      message: The fleet's Default group can't be renamed or deleted.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/GroupAssignmentRefused"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteCollectorGroup
+      tags: [collector groups]
+      summary: Delete a collector group and its collectors.
+      description: |
+        In one transaction, the group's collectors (and their error
+        history) and the group are deleted. A collector of the group that
+        is still running finds no record on its next poll, is asked for its
+        full state, and is refused (403) when that names the deleted group;
+        it keeps the configuration it has. The Default group itself can't be
+        deleted (409 `collector_group_is_default`, deleting nothing). Once
+        started, the delete completes even if the caller goes away (within
+        5 minutes of its own; only the server's stop cuts it off, and then
+        nothing is deleted), as a fleet's does.
+      responses:
+        "204":
+          description: Deleted, with its collectors.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/CollectorGroupNotFound"
+        "409":
+          description: The Default group can't be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: collector_group_is_default
+                  message: The fleet's Default group can't be renamed or deleted.
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/tokens:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+    get:
+      operationId: listEnrollmentTokens
+      tags: [enrollment tokens]
+      summary: List a fleet's enrollment tokens, newest first, without their bearers.
+      description: |
+        Ordered by `createdAt`, then by id, both descending. Each token
+        carries how many of the fleet's collectors were last seen on it in
+        the last 5 minutes (`activeCollectors`). A bearer is never listed:
+        reveal one.
+      responses:
+        "200":
+          description: Every token of the fleet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollmentTokenList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/tokens/events:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+    get:
+      operationId: listEnrollmentTokenEvents
+      tags: [enrollment tokens]
+      summary: A fleet's token events, newest first.
+      description: |
+        What was done to the fleet's tokens: each `issued` (a fleet's create,
+        a rotation's new token), `viewed` (a reveal), `rotated` (a rotation
+        put it in its grace period) and `revoked` (the first revoke only),
+        with who did it (null for no person) and when. An event names its
+        token by id, never its bearer or its kind. Ordered by `occurredAt`,
+        then id, both descending; pages by keyset as the other lists do.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: The page's size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          description: An opaque `nextCursor` from an earlier page of the same list.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollmentTokenEventList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/tokens/rotate:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+    post:
+      operationId: rotateEnrollmentToken
+      tags: [enrollment tokens]
+      summary: Rotate the fleet's rotate token, with a grace period for the one it replaces.
+      description: |
+        Under the fleet's lock, so rotations of one fleet take turns: the
+        fleet must be active (409 `fleet_archived`); its current rotate token
+        (the newest valid one not already in a grace period), if it has one,
+        stops authenticating at `graceEndsAt`, or at its own expiry if that is
+        sooner (a rotation never lengthens a token's life), and its
+        collectors are pushed the new token on their next polls; a new rotate
+        token is made, expiring at `expiresAt` (null: never). Events
+        `rotated` (the old token) and `issued` (the new one) name `actor`.
+        `graceEndsAt` must be in the future and not after `expiresAt` (400).
+        The reply carries the new token's bearer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollmentTokenRotateRequest"
+      responses:
+        "201":
+          description: The new rotate token and its bearer.
+          headers:
+            Cache-Control:
+              description: The reply carries a bearer, which no proxy or client cache may keep.
+              required: true
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollmentTokenRotated"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "409":
+          description: The fleet is archived.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: fleet_archived
+                  message: The fleet is archived.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/tokens/default:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+    post:
+      operationId: issueDefaultEnrollmentToken
+      tags: [enrollment tokens]
+      summary: A new default token, once every default token the fleet had is revoked.
+      description: |
+        Under the fleet's lock: the fleet must be active (409
+        `fleet_archived`) and hold no valid default token (409
+        `enrollment_token_default_exists`; a default token never expires,
+        so valid is not revoked). A new default token is made, with an
+        `issued` event naming `actor`; the revoked ones stay revoked. Of two
+        issues racing for one fleet, one makes the token and the other
+        answers 409 `enrollment_token_default_exists`. The reply carries the
+        new token's bearer, as a reveal's does.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActorRequest"
+      responses:
+        "201":
+          description: The new default token and its bearer.
+          headers:
+            Cache-Control:
+              description: The reply carries a bearer, which no proxy or client cache may keep.
+              required: true
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollmentTokenRevealed"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "409":
+          description: The fleet is archived (`fleet_archived`), or has a valid default token (`enrollment_token_default_exists`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                archived:
+                  value:
+                    error:
+                      code: fleet_archived
+                      message: The fleet is archived.
+                exists:
+                  value:
+                    error:
+                      code: enrollment_token_default_exists
+                      message: The fleet already has a valid default token.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/tokens/{tokenId}/reveal:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+      - $ref: "#/components/parameters/tokenId"
+    post:
+      operationId: revealEnrollmentToken
+      tags: [enrollment tokens]
+      summary: A fresh bearer for a valid enrollment token, audited.
+      description: |
+        Bearers are never stored: each reveal encrypts the token anew, under
+        the server's current key, and writes a `viewed` event naming
+        `actor`. A revoked token answers 409 `enrollment_token_revoked`, an
+        expired one 409 `enrollment_token_expired`, writing nothing. A token
+        of an archived fleet is revealed too (a reveal is a view; the fleet
+        may be unarchived), though the agent endpoint refuses it while the
+        fleet is archived.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActorRequest"
+      responses:
+        "200":
+          description: The token's bearer.
+          headers:
+            Cache-Control:
+              description: The reply carries a bearer, which no proxy or client cache may keep.
+              required: true
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollmentTokenRevealed"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/EnrollmentTokenNotFound"
+        "409":
+          description: The token is revoked (`enrollment_token_revoked`) or has expired (`enrollment_token_expired`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                revoked:
+                  value:
+                    error:
+                      code: enrollment_token_revoked
+                      message: The enrollment token is revoked.
+                expired:
+                  value:
+                    error:
+                      code: enrollment_token_expired
+                      message: The enrollment token has expired.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/tokens/{tokenId}/revoke:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+      - $ref: "#/components/parameters/tokenId"
+    post:
+      operationId: revokeEnrollmentToken
+      tags: [enrollment tokens]
+      summary: Revoke an enrollment token, audited.
+      description: |
+        Sets `revokedAt` and writes a `revoked` event naming `actor`. A token
+        already revoked answers 200 with the token as it is, changing nothing
+        and writing no event, so a retry is safe. The default token may be
+        revoked too: collectors that restart then present it, are refused,
+        and stay offline until they are given another token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActorRequest"
+      responses:
+        "200":
+          description: The token, revoked.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollmentToken"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/EnrollmentTokenNotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/collectors:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+    get:
+      operationId: listCollectorInstances
+      tags: [collectors]
+      summary: List, search, sort and page a fleet's collectors.
+      description: |
+        Ordered by `sort` (`created`, the default; `lastSeen`; or `name`,
+        compared as bytes) in `order` (`desc`, the default, or `asc`), ties
+        by id in the same direction. `q` keeps the collectors whose name,
+        reported IP or reported host IP contains it, ignoring case (`%`, `_`
+        and `\` are taken literally); `groupId` keeps one group's. Pages by
+        keyset: pass a reply's `nextCursor` as `cursor` with the same `sort`
+        and `order` (another's is a 400); it is null on the last page. Each
+        parameter may be given once. Every collector carries its `liveness`
+        and `sync` at the server's clock.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Text the name or an address must contain, at most 100 characters.
+          schema:
+            type: string
+            maxLength: 100
+            pattern: '^[^\x00]*$'
+        - name: groupId
+          in: query
+          required: false
+          description: Only this group's collectors.
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: sort
+          in: query
+          required: false
+          description: The order's key.
+          schema:
+            type: string
+            enum: [created, lastSeen, name]
+            default: created
+        - name: order
+          in: query
+          required: false
+          description: The order's direction.
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: limit
+          in: query
+          required: false
+          description: The page's size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          description: An opaque `nextCursor` from an earlier page of the same list, sort and order.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorInstanceList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/collectors/pin:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+    post:
+      operationId: pinCollectorInstances
+      tags: [collectors]
+      summary: Pin, or unpin, up to 500 of a fleet's collectors at once.
+      description: |
+        In one transaction, every one of the fleet's collectors among
+        `collectorIds` is changed as asked, by at least one of two fields; a
+        field left out leaves each collector's as it is.
+        `pin` pins a published version of the organization's (which wins
+        over the group's assignment), or `pin: null` unpins.
+        `pinnedVariableGroupId` pins a variable group of the organization's
+        (its overrides win over the group's variable group's), or `null`
+        returns each to its group's. The reply lists the ids changed as
+        asked (`updated`, whether or not they already were) and the ids the
+        fleet doesn't hold (`notFound`, another fleet's or organization's
+        included), each sorted and once (an id given twice counts once). A
+        published version or a variable group the organization doesn't
+        hold, or a published version referencing names no variable has,
+        answers 422, changing nothing; a pin of any other kind is an
+        invalid request (400).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectorInstanceBulkPinRequest"
+      responses:
+        "200":
+          description: What was pinned, and what the fleet doesn't hold.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorInstanceBulkPinResult"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/FleetNotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/PinRefused"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/collectors/{collectorId}:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+      - $ref: "#/components/parameters/collectorId"
+    get:
+      operationId: getCollectorInstance
+      tags: [collectors]
+      summary: Read a collector.
+      responses:
+        "200":
+          description: The collector, with its liveness and sync at the server's clock.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorInstance"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/CollectorNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateCollectorInstance
+      tags: [collectors]
+      summary: Rename a collector, move it to another group, pin or unpin it.
+      description: |
+        Sets each field given, at least one, all of them or none: `name`
+        (unique in the organization, compared as written: 409
+        `collector_name_taken`), `groupId` (one of the fleet's groups: 404
+        `collector_group_not_found`), `pin` (a published version of the
+        organization's, which wins over the group's assignment; null
+        unpins; one not held answers 422, one referencing names no
+        variable has 422 `variables_undefined`, a pin of any other kind
+        400), `pinnedVariableGroupId` (a variable group of the
+        organization's, independent of `pin`, whose overrides win over the
+        group's variable group's; null returns it to its group's; one not
+        held answers 422).
+        `updatedAt` moves only when something changes. The collector's next
+        poll is served what then resolves.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectorInstanceUpdateRequest"
+      responses:
+        "200":
+          description: The collector, updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorInstance"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: |
+            The organization isn't registered (`organization_not_found`), it
+            holds no fleet with this id (`fleet_not_found`), the fleet has no
+            collector with this id (`collector_not_found`), or no group with
+            `groupId` (`collector_group_not_found`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                collectorNotFound:
+                  value:
+                    error:
+                      code: collector_not_found
+                      message: The fleet has no collector with this id.
+                collectorGroupNotFound:
+                  value:
+                    error:
+                      code: collector_group_not_found
+                      message: The fleet has no collector group with this id.
+                fleetNotFound:
+                  value:
+                    error:
+                      code: fleet_not_found
+                      message: The organization has no fleet with this id.
+                organizationNotFound:
+                  value:
+                    error:
+                      code: organization_not_found
+                      message: "No organization with this id is registered: register it with POST /api/v1/organizations first."
+        "409":
+          description: Another of the organization's collectors has the name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: collector_name_taken
+                  message: Another of the organization's collectors has this name.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/PinRefused"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteCollectorInstance
+      tags: [collectors]
+      summary: Delete a collector and its error history.
+      description: |
+        Its place under the organization's cap is freed. A collector still
+        running is asked for its full state on its next poll and enrolls
+        again with the answer, as a new collector with nothing pinned: it is
+        served its group's published version, if the group has one, else
+        nothing (it keeps running what it has).
+      responses:
+        "204":
+          description: Deleted.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/CollectorNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/fleets/{fleetId}/collectors/{collectorId}/errors:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/fleetId"
+      - $ref: "#/components/parameters/collectorId"
+    get:
+      operationId: listCollectorInstanceErrors
+      tags: [collectors]
+      summary: A collector's error history, newest first.
+      description: |
+        The failures the collector reported applying a configuration: its
+        newest 100, each kept 30 days. Ordered by `reportedAt`, then id, both
+        descending; pages by keyset as the other lists do. A message is the
+        collector's own text, at most 8 KiB.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: The page's size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          description: An opaque `nextCursor` from an earlier page of the same list.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorInstanceErrorList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/CollectorNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/variables:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+    get:
+      operationId: listVariables
+      tags: [variables]
+      summary: List the organization's variables, values included.
+      description: |
+        Every variable of the organization (at most 150), by name compared
+        as bytes, each with its value: there are no secret variables. The
+        platform's test runs and validation read the values here.
+      responses:
+        "200":
+          description: Every variable of the organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createVariable
+      tags: [variables]
+      summary: Create a variable under the caller's id.
+      description: |
+        Idempotent by `id` (the caller's; without one the server makes one,
+        and such a create can't be safely retried). An id no variable has:
+        created, 201. The same id again in the organization with the same
+        `name`, `value` and `description`: nothing changes, 200 with the
+        stored variable. The same id with anything different:
+        409 `variable_conflict`, saying nothing about the stored row. An id
+        another organization holds is a 409 `variable_conflict` too, but only
+        when the name is free in this organization and its limit isn't
+        reached: otherwise the create answers `variable_name_taken` or
+        `variable_limit_reached` first, as for any new id.
+
+        `name` is the reference's NAME, `${org:NAME}`: unique in the
+        organization as written (case-sensitive; 409
+        `variable_name_taken`). An organization holds at most 150 variables
+        (409 `variable_limit_reached`). `value` is single-line: a line
+        break or another control character is a 400 naming `value`, never
+        quoting it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VariableCreateRequest"
+      responses:
+        "200":
+          description: The organization already holds this id with this name, value and description; nothing changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Variable"
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Variable"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "409":
+          description: |
+            The id is taken otherwise (`variable_conflict`), another of the
+            organization's variables has the name (`variable_name_taken`), or
+            the organization has 150 variables (`variable_limit_reached`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                variableConflict:
+                  value:
+                    error:
+                      code: variable_conflict
+                      message: A different variable already has this id.
+                variableNameTaken:
+                  value:
+                    error:
+                      code: variable_name_taken
+                      message: Another of the organization's variables has this name.
+                variableLimitReached:
+                  value:
+                    error:
+                      code: variable_limit_reached
+                      message: The organization has 150 variables, the most it may have.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/variables/{variableId}:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/variableId"
+    patch:
+      operationId: updateVariable
+      tags: [variables]
+      summary: Rename a variable, change its value or its description.
+      description: |
+        Sets each of `name`, `value` and `description` given, at least one
+        (`description` null removes it), as `actor`; last write wins.
+        `changedAt` moves only when something changes. A rename is refused
+        while a published version that a collector group or a collector
+        uses references the old name (409 `variable_in_use`, with what uses
+        it in `details`); a value change is never refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VariableUpdateRequest"
+      responses:
+        "200":
+          description: The variable, updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Variable"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/VariableNotFound"
+        "409":
+          description: |
+            Another of the organization's variables has the new name
+            (`variable_name_taken`), or the old name is in use
+            (`variable_in_use`, with `details`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                variableNameTaken:
+                  value:
+                    error:
+                      code: variable_name_taken
+                      message: Another of the organization's variables has this name.
+                variableInUse:
+                  $ref: "#/components/examples/VariableInUse"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteVariable
+      tags: [variables]
+      summary: Delete a variable and its overrides.
+      description: |
+        Refused while a published version that a collector group or a
+        collector uses references its name (409 `variable_in_use`, with what
+        uses it in `details`). Drafts and published versions nothing uses
+        don't count.
+      responses:
+        "204":
+          description: Deleted, with every variable group's override of it.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/VariableNotFound"
+        "409":
+          description: A used published version references its name (`variable_in_use`, with `details`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                variableInUse:
+                  $ref: "#/components/examples/VariableInUse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/variable-groups:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+    get:
+      operationId: listVariableGroups
+      tags: [variable groups]
+      summary: List the organization's variable groups.
+      description: |
+        Every variable group of the organization (at most 100), by name
+        compared as bytes, each with its count of overrides and what uses
+        it.
+      responses:
+        "200":
+          description: Every variable group of the organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableGroupList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createVariableGroup
+      tags: [variable groups]
+      summary: Create a variable group under the caller's id.
+      description: |
+        Idempotent by `id`, as a variable's create: the same id with the
+        same `name` and `description` answers 200; with anything different,
+        409 `variable_group_conflict`; another organization's id is a 409
+        `variable_group_conflict` only when the name is free and the limit
+        isn't reached. `name` is unique in the organization as written (409
+        `variable_group_name_taken`). An organization holds at most 100
+        variable groups (409 `variable_group_limit_reached`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VariableGroupCreateRequest"
+      responses:
+        "200":
+          description: The organization already holds this id with this name and description; nothing changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableGroup"
+        "201":
+          description: Created, with no override.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableGroup"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OrganizationNotFound"
+        "409":
+          description: |
+            The id is taken otherwise (`variable_group_conflict`), another of
+            the organization's variable groups has the name
+            (`variable_group_name_taken`), or the organization has 100
+            variable groups (`variable_group_limit_reached`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                variableGroupConflict:
+                  value:
+                    error:
+                      code: variable_group_conflict
+                      message: A different variable group already has this id.
+                variableGroupNameTaken:
+                  value:
+                    error:
+                      code: variable_group_name_taken
+                      message: Another of the organization's variable groups has this name.
+                variableGroupLimitReached:
+                  value:
+                    error:
+                      code: variable_group_limit_reached
+                      message: The organization has 100 variable groups, the most it may have.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/variable-groups/{variableGroupId}:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/variableGroupId"
+    get:
+      operationId: getVariableGroup
+      tags: [variable groups]
+      summary: Read a variable group and its overrides.
+      description: |
+        The group, and its overrides (each with a value) by their
+        variable's name compared as bytes. A variable the group doesn't
+        override takes the organization's value.
+      responses:
+        "200":
+          description: The group and its overrides.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableGroupDetail"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/VariableGroupNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateVariableGroup
+      tags: [variable groups]
+      summary: Rename a variable group or change its description.
+      description: |
+        Sets each of `name` and `description` given, at least one
+        (`description` null removes it), as `actor`; last write wins.
+        `changedAt` moves only when something changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VariableGroupUpdateRequest"
+      responses:
+        "200":
+          description: The group, updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableGroup"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/VariableGroupNotFound"
+        "409":
+          description: Another of the organization's variable groups has the name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: variable_group_name_taken
+                  message: Another of the organization's variable groups has this name.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteVariableGroup
+      tags: [variable groups]
+      summary: Delete a variable group and its overrides.
+      description: |
+        Refused while a collector group uses it or a collector has it
+        pinned (409 `variable_group_in_use`, with what uses it in
+        `details`).
+      responses:
+        "204":
+          description: Deleted, with its overrides.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/VariableGroupNotFound"
+        "409":
+          description: A collector group or a collector uses it (`variable_group_in_use`, with `details`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: variable_group_in_use
+                  message: "A collector group or a collector uses this variable group: choose another for them first."
+                  details:
+                    collectorGroups:
+                      - fleetId: 5a5a5a5a-0000-4000-8000-00000000005a
+                        groupId: 6a6a6a6a-0000-4000-8000-00000000006a
+                    totalCollectorGroups: 1
+                    pinnedCollectors: 2
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/organizations/{organizationId}/variable-groups/{variableGroupId}/overrides/{variableId}:
+    parameters:
+      - $ref: "#/components/parameters/organizationId"
+      - $ref: "#/components/parameters/variableGroupId"
+      - $ref: "#/components/parameters/variableId"
+    put:
+      operationId: setVariableGroupOverride
+      tags: [variable groups]
+      summary: Set the variable group's override of a variable.
+      description: |
+        The group's collectors are filled in with `value` for this variable,
+        under their pin's variable group's override. 201 when the group had
+        no override of it (one reset earlier included); 200 when it replaced
+        one, or when `value` is the one it had (then nothing changes,
+        `changedAt` included).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VariableGroupOverrideRequest"
+      responses:
+        "200":
+          description: The override, replaced, or unchanged for the same value.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableGroupOverride"
+        "201":
+          description: The override, new.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableGroupOverride"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OverrideTargetNotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: resetVariableGroupOverride
+      tags: [variable groups]
+      summary: Reset the variable group's override of a variable.
+      description: |
+        The group's collectors take the organization's value for this
+        variable again (under their pin's variable group's override). 204
+        whether or not the group had an override of it: with none, nothing
+        changes. The body names who resets it: a reset override and its
+        variable group record `actor` as `changedBy`. It is required, a reset
+        of nothing included; a missing or malformed `actor` is a 400.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActorRequest"
+      responses:
+        "204":
+          description: Reset, or there was no override.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/OverrideTargetNotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/api-keys:
+    post:
+      operationId: createApiKey
+      tags: [api keys]
+      summary: Mint an API key.
+      description: |
+        Mints a key for the organizations in `organizationIds`, or for
+        every organization, registered now or later, when it is null. The
+        reply is the only one that carries the key itself (`key`); the
+        server keeps only its secret's hash, so a key that is lost is
+        revoked and minted again. `expiresAt` must be in the future and at
+        most 2 years away; every key expires. At most 100 keys may be valid
+        (neither revoked nor expired) at once (409
+        `api_key_limit_reached`). Each organization must be registered (404
+        `organization_not_found`). The secret only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyCreateRequest"
+      responses:
+        "201":
+          description: Minted, with the key itself, answered this once.
+          headers:
+            Cache-Control:
+              description: The reply carries a key, which no proxy or client cache may keep.
+              required: true
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreated"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/SecretOnly"
+        "404":
+          description: An organization in `organizationIds` isn't registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: organization_not_found
+                  message: "An organization in organizationIds isn't registered: register it with POST /api/v1/organizations first."
+        "409":
+          description: 100 keys are valid already.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: api_key_limit_reached
+                  message: "100 API keys are valid already: revoke one first."
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      operationId: listApiKeys
+      tags: [api keys]
+      summary: List every API key.
+      description: |
+        Every key, revoked and expired ones too, newest first. Never a key
+        itself. The secret only.
+      responses:
+        "200":
+          description: The keys.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/SecretOnly"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/api-keys/{apiKeyId}:
+    parameters:
+      - $ref: "#/components/parameters/apiKeyId"
+    get:
+      operationId: getApiKey
+      tags: [api keys]
+      summary: Read an API key.
+      description: The key, never the key itself. The secret only.
+      responses:
+        "200":
+          description: The key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKey"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/SecretOnly"
+        "404":
+          $ref: "#/components/responses/ApiKeyNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateApiKey
+      tags: [api keys]
+      summary: Rename an API key or change its description.
+      description: |
+        Sets each of `name` and `description` given, at least one
+        (`description` null removes it). A revoked or expired key may still
+        be renamed. Its organizations and its expiry never change: mint
+        another key. The secret only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyUpdateRequest"
+      responses:
+        "200":
+          description: The key, updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKey"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/SecretOnly"
+        "404":
+          $ref: "#/components/responses/ApiKeyNotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/api-keys/{apiKeyId}/revoke:
+    parameters:
+      - $ref: "#/components/parameters/apiKeyId"
+    post:
+      operationId: revokeApiKey
+      tags: [api keys]
+      summary: Revoke an API key.
+      description: |
+        Sets `revokedAt`; takes no body. The next request with the key is
+        refused 401, on every server. A key already revoked answers 200 with
+        the key as it is, keeping the first revocation's time, so a retry is
+        safe. The key is kept, with its name, as a record. The secret only.
+      responses:
+        "200":
+          description: The key, revoked.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKey"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/SecretOnly"
+        "404":
+          $ref: "#/components/responses/ApiKeyNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        The shared management secret, at least 32 bytes; or an API key,
+        `opk_` and 76 more characters, which opens the routes of the
+        organizations it names.
+  parameters:
+    organizationId:
+      name: organizationId
+      in: path
+      required: true
+      description: The organization, an opaque tenant key, registered with `POST /api/v1/organizations`.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    publicationId:
+      name: publicationId
+      in: path
+      required: true
+      description: The publication's id, chosen by the caller, fresh for each publish attempt.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    fleetId:
+      name: fleetId
+      in: path
+      required: true
+      description: The fleet's id. Another organization's fleet is the same 404 as one that doesn't exist.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    groupId:
+      name: groupId
+      in: path
+      required: true
+      description: The collector group's id, one of the fleet's.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    tokenId:
+      name: tokenId
+      in: path
+      required: true
+      description: The enrollment token's id, one of the fleet's.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    collectorId:
+      name: collectorId
+      in: path
+      required: true
+      description: The collector's id (not its instance uid), one of the fleet's.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    variableId:
+      name: variableId
+      in: path
+      required: true
+      description: The variable's id, one of the organization's.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    variableGroupId:
+      name: variableGroupId
+      in: path
+      required: true
+      description: The variable group's id, one of the organization's.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    apiKeyId:
+      name: apiKeyId
+      in: path
+      required: true
+      description: The API key's id.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+  responses:
+    InvalidRequest:
+      description: A path id, a query parameter, the Content-Type or the body is invalid; the message names which.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: invalid_request
+              message: configuration.name must be 1 to 200 characters.
+    Unauthorized:
+      description: The Authorization header is missing, malformed or wrong. Always this body.
+      headers:
+        WWW-Authenticate:
+          required: true
+          schema:
+            type: string
+            const: Bearer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: unauthorized
+              message: Missing or invalid credentials.
+    NotFound:
+      description: No organization has this id (`not_found`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: not_found
+              message: Not found.
+    PublicationNotFound:
+      description: |
+        The organization isn't registered (`organization_not_found`), or it
+        holds no publication with this id (`not_found`; another
+        organization's publication is the same 404).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            notFound:
+              value:
+                error:
+                  code: not_found
+                  message: Not found.
+            organizationNotFound:
+              value:
+                error:
+                  code: organization_not_found
+                  message: "No organization with this id is registered: register it with POST /api/v1/organizations first."
+    OrganizationNotFound:
+      description: The organization isn't registered (`organization_not_found`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: organization_not_found
+              message: "No organization with this id is registered: register it with POST /api/v1/organizations first."
+    PayloadTooLarge:
+      description: The request body is larger than 2 MiB.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: payload_too_large
+              message: The request body is larger than 2 MiB.
+    SecretOnly:
+      description: The request authenticated with an API key, and this route takes the management secret only.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: forbidden
+              message: This route takes the management secret, not an API key.
+    ApiKeyNotFound:
+      description: No API key has this id.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: api_key_not_found
+              message: No API key has this id.
+    InternalError:
+      description: The server failed; nothing about why.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: internal_error
+              message: Internal server error.
+    DeleteInProgress:
+      description: |
+        This server is already running the same delete, an organization's
+        or a fleet's (or, for a fleet, its organization's): the request is
+        answered at once rather than waiting for it, holding nothing. Retry
+        after `Retry-After` seconds; once the delete has finished, the retry
+        answers 404, which means deleted.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9]+$"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: delete_in_progress
+              message: "This delete is already running: retry later; once it has finished, a retry answers 404."
+    FleetNotFound:
+      description: |
+        The organization isn't registered (`organization_not_found`), or it
+        holds no fleet with this id (`fleet_not_found`; another
+        organization's fleet is the same 404).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            fleetNotFound:
+              value:
+                error:
+                  code: fleet_not_found
+                  message: The organization has no fleet with this id.
+            organizationNotFound:
+              value:
+                error:
+                  code: organization_not_found
+                  message: "No organization with this id is registered: register it with POST /api/v1/organizations first."
+    CollectorGroupNotFound:
+      description: |
+        The organization isn't registered (`organization_not_found`), it
+        holds no fleet with this id (`fleet_not_found`), or the fleet has no
+        group with this id (`collector_group_not_found`). Another
+        organization's or another fleet's group is the same 404.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            collectorGroupNotFound:
+              value:
+                error:
+                  code: collector_group_not_found
+                  message: The fleet has no collector group with this id.
+            fleetNotFound:
+              value:
+                error:
+                  code: fleet_not_found
+                  message: The organization has no fleet with this id.
+            organizationNotFound:
+              value:
+                error:
+                  code: organization_not_found
+                  message: "No organization with this id is registered: register it with POST /api/v1/organizations first."
+    EnrollmentTokenNotFound:
+      description: |
+        The organization isn't registered (`organization_not_found`), it
+        holds no fleet with this id (`fleet_not_found`), or the fleet has no
+        enrollment token with this id (`enrollment_token_not_found`). Another
+        organization's or another fleet's token is the same 404.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            enrollmentTokenNotFound:
+              value:
+                error:
+                  code: enrollment_token_not_found
+                  message: The fleet has no enrollment token with this id.
+            fleetNotFound:
+              value:
+                error:
+                  code: fleet_not_found
+                  message: The organization has no fleet with this id.
+            organizationNotFound:
+              value:
+                error:
+                  code: organization_not_found
+                  message: "No organization with this id is registered: register it with POST /api/v1/organizations first."
+    CollectorNotFound:
+      description: |
+        The organization isn't registered (`organization_not_found`), it
+        holds no fleet with this id (`fleet_not_found`), or the fleet has no
+        collector with this id (`collector_not_found`). Another
+        organization's or another fleet's collector is the same 404.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            collectorNotFound:
+              value:
+                error:
+                  code: collector_not_found
+                  message: The fleet has no collector with this id.
+            fleetNotFound:
+              value:
+                error:
+                  code: fleet_not_found
+                  message: The organization has no fleet with this id.
+            organizationNotFound:
+              value:
+                error:
+                  code: organization_not_found
+                  message: "No organization with this id is registered: register it with POST /api/v1/organizations first."
+    VariableNotFound:
+      description: |
+        The organization isn't registered (`organization_not_found`), or it
+        holds no variable with this id (`variable_not_found`; another
+        organization's variable is the same 404).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            variableNotFound:
+              value:
+                error:
+                  code: variable_not_found
+                  message: The organization holds no variable with this id.
+            organizationNotFound:
+              value:
+                error:
+                  code: organization_not_found
+                  message: "No organization with this id is registered: register it with POST /api/v1/organizations first."
+    VariableGroupNotFound:
+      description: |
+        The organization isn't registered (`organization_not_found`), or it
+        holds no variable group with this id (`variable_group_not_found`;
+        another organization's variable group is the same 404).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            variableGroupNotFound:
+              value:
+                error:
+                  code: variable_group_not_found
+                  message: The organization holds no variable group with this id.
+            organizationNotFound:
+              value:
+                error:
+                  code: organization_not_found
+                  message: "No organization with this id is registered: register it with POST /api/v1/organizations first."
+    OverrideTargetNotFound:
+      description: |
+        The organization isn't registered (`organization_not_found`), or it
+        holds no variable group (`variable_group_not_found`) or no variable
+        (`variable_not_found`) with the path's id. Another organization's is
+        the same 404.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            variableGroupNotFound:
+              value:
+                error:
+                  code: variable_group_not_found
+                  message: The organization holds no variable group with this id.
+            variableNotFound:
+              value:
+                error:
+                  code: variable_not_found
+                  message: The organization holds no variable with this id.
+            organizationNotFound:
+              value:
+                error:
+                  code: organization_not_found
+                  message: "No organization with this id is registered: register it with POST /api/v1/organizations first."
+    PinRefused:
+      description: |
+        Nothing was changed: `pin` names a published version the
+        organization doesn't hold (`publication_not_found`),
+        `pinnedVariableGroupId` a variable group it doesn't hold
+        (`variable_group_not_found`), or `pin` a published version that
+        references `${org:NAME}` names no variable of the organization has
+        (`variables_undefined`, the names in `details`: at most 100, in byte
+        order, with their total).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            publicationNotFound:
+              value:
+                error:
+                  code: publication_not_found
+                  message: The organization holds no published version with this id.
+            variableGroupNotFound:
+              value:
+                error:
+                  code: variable_group_not_found
+                  message: The organization holds no variable group with this id.
+            variablesUndefined:
+              $ref: "#/components/examples/VariablesUndefined"
+    GroupAssignmentRefused:
+      description: |
+        Nothing was changed: `assignedPublicationId` names a published
+        version the organization doesn't hold (`publication_not_found`),
+        `variableGroupId` a variable group it doesn't hold
+        (`variable_group_not_found`), or `assignedPublicationId` a newly
+        assigned published version that references `${org:NAME}` names no
+        variable of the organization has (`variables_undefined`, the names
+        in `details`: at most 100, in byte order, with their total).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            publicationNotFound:
+              value:
+                error:
+                  code: publication_not_found
+                  message: The organization holds no published version with this id.
+            variableGroupNotFound:
+              value:
+                error:
+                  code: variable_group_not_found
+                  message: The organization holds no variable group with this id.
+            variablesUndefined:
+              $ref: "#/components/examples/VariablesUndefined"
+  examples:
+    VariableInUse:
+      summary: A variable's rename or delete refused while in use.
+      value:
+        error:
+          code: variable_in_use
+          message: "A published version that a collector group or a collector uses references this variable: assign or pin another version first."
+          details:
+            usedBy:
+              - publicationId: 1a1a1a1a-0000-4000-8000-00000000001a
+                groups:
+                  - fleetId: 5a5a5a5a-0000-4000-8000-00000000005a
+                    groupId: 6a6a6a6a-0000-4000-8000-00000000006a
+                pinnedCollectors: 3
+            totalPublications: 1
+            totalGroups: 1
+            totalPinnedCollectors: 3
+    VariablesUndefined:
+      summary: An assignment or a pin refused for names no variable has.
+      value:
+        error:
+          code: variables_undefined
+          message: The published version references organization variables that aren't defined.
+          details:
+            names: [API_KEY_HEADER, REGION]
+            totalNames: 2
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+      pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    OrganizationName:
+      type: string
+      description: |
+        A display name, 1 to 400 characters, kept exactly as sent (not
+        trimmed); the caller owns the real one.
+      minLength: 1
+      maxLength: 400
+      pattern: '^[^\x00]*$'
+    OrganizationCreateRequest:
+      type: object
+      description: An organization to register. `id` is optional; no other field is allowed.
+      additionalProperties: false
+      required: [name]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/OrganizationName"
+      example:
+        id: 5d6c7b8a-9e0f-4a1b-8c2d-3e4f5a6b7c8d
+        name: ana@acme.io's workspace
+    OrganizationRenameRequest:
+      type: object
+      description: The organization's new name. No other field is allowed.
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          $ref: "#/components/schemas/OrganizationName"
+    OrganizationIdReply:
+      type: object
+      description: The registered organization's id.
+      additionalProperties: false
+      required: [organizationId]
+      properties:
+        organizationId:
+          $ref: "#/components/schemas/Uuid"
+    Organization:
+      type: object
+      description: A registered organization.
+      additionalProperties: false
+      required: [organizationId, name, createdAt, updatedAt]
+      properties:
+        organizationId:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/OrganizationName"
+        createdAt:
+          type: string
+          format: date-time
+          description: When this server registered it, by its clock, in UTC, with milliseconds.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When its name last changed (createdAt until it is renamed), in UTC, with milliseconds.
+    Sha256:
+      type: string
+      description: A SHA-256, 64 lowercase hex characters.
+      pattern: "^[0-9a-f]{64}$"
+    ConfigurationName:
+      type: string
+      description: The configuration's name when it was published.
+      minLength: 1
+      maxLength: 200
+      pattern: '^[^\x00]*$'
+    VersionNumber:
+      type: integer
+      description: The version's number in its configuration, from 1. Any JSON number with a whole value counts (3.0 is 3).
+      minimum: 1
+      maximum: 2147483647
+    VersionLabel:
+      type: [string, "null"]
+      description: The version's name when it was published, or null for an unnamed version.
+      minLength: 1
+      maxLength: 80
+      pattern: '^[^\x00]*$'
+    Email:
+      type: string
+      description: The publisher's email when they published.
+      minLength: 1
+      maxLength: 320
+      pattern: '^[^\x00]*$'
+    Yaml:
+      type: string
+      description: |
+        The collector configuration, exactly as published: 1 byte to 1 MiB
+        (1,048,576 bytes) of UTF-8. maxLength counts characters, so the byte
+        limit is the stricter one for multi-byte text.
+      minLength: 1
+      maxLength: 1048576
+      pattern: '^[^\x00]*$'
+    Configuration:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/ConfigurationName"
+    Version:
+      type: object
+      additionalProperties: false
+      required: [id, number, label]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        number:
+          $ref: "#/components/schemas/VersionNumber"
+        label:
+          $ref: "#/components/schemas/VersionLabel"
+    Actor:
+      type: [object, "null"]
+      description: Who published or acted, or null for a change no person made. Both fields, or null.
+      additionalProperties: false
+      required: [id, email]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        email:
+          $ref: "#/components/schemas/Email"
+    Collector:
+      type: object
+      description: |
+        The collector the configuration was published for: a distribution and
+        one of its versions, as the platform's catalogue names them. Plain
+        values: the server keeps them with the publication and compares them
+        for the same id, and holds no catalogue. Both fields are required, and
+        no other is allowed; null is refused.
+      additionalProperties: false
+      required: [distribution, version]
+      properties:
+        distribution:
+          type: string
+          description: |
+            The distribution's id, lowercase letters and digits in words
+            joined by single hyphens.
+          maxLength: 64
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+          example: otelcol-contrib
+        version:
+          type: string
+          description: The collector version, major.minor.patch.
+          maxLength: 64
+          pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          example: "0.162.0"
+    PublicationRequest:
+      type: object
+      description: |
+        A publication as the caller sends it. Every field but `id` is
+        required; the nullable ones (`version.label`, `publishedBy`) are sent
+        as null. No other field is allowed. `id` is the publication's id,
+        chosen by the caller so a retry is safe; left out, the server makes
+        one.
+      additionalProperties: false
+      required: [configuration, version, yaml, sha256, publishedBy, publishedAt, collector]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        configuration:
+          $ref: "#/components/schemas/Configuration"
+        version:
+          $ref: "#/components/schemas/Version"
+        yaml:
+          $ref: "#/components/schemas/Yaml"
+        sha256:
+          $ref: "#/components/schemas/Sha256"
+        publishedBy:
+          $ref: "#/components/schemas/Actor"
+        publishedAt:
+          type: string
+          format: date-time
+          description: |
+            When the platform published it, by its clock. Its instant must
+            fall in the years 0001 to 9999 in UTC, and a numeric offset be
+            at most 23:59 either way (anything else is a 400). Kept to the
+            millisecond (anything finer is dropped). A leap second (second
+            60) is refused (400).
+        collector:
+          $ref: "#/components/schemas/Collector"
+      example:
+        configuration:
+          id: 6f1c1d0e-8f2b-4c55-9b1a-2f0e3d4c5b6a
+          name: payments-gateway
+        version:
+          id: 0b8e7c6d-5a4f-4e3d-8c2b-1a0f9e8d7c6b
+          number: 3
+          label: TLS on
+        yaml: "receivers:\n  otlp:\n"
+        sha256: b78a3cd731efa5449c24e08abafbba0cd20d4f2eb9612573365b1b1f38b26c53
+        publishedBy:
+          id: 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+          email: ana@acme.io
+        publishedAt: "2026-10-03T14:02:11.000Z"
+        collector:
+          distribution: otelcol-contrib
+          version: "0.162.0"
+    PublicationSummary:
+      type: object
+      description: A stored publication without its YAML, as the list gives it.
+      additionalProperties: false
+      required: [id, organizationId, configuration, version, sha256, publishedBy, publishedAt, receivedAt, collector]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        organizationId:
+          $ref: "#/components/schemas/Uuid"
+        configuration:
+          $ref: "#/components/schemas/Configuration"
+        version:
+          $ref: "#/components/schemas/Version"
+        sha256:
+          $ref: "#/components/schemas/Sha256"
+        publishedBy:
+          $ref: "#/components/schemas/Actor"
+        publishedAt:
+          type: string
+          format: date-time
+          description: When the platform published it, in UTC, with milliseconds.
+        receivedAt:
+          type: string
+          format: date-time
+          description: When this server first stored it, by its clock, in UTC, with milliseconds.
+        collector:
+          $ref: "#/components/schemas/Collector"
+    Publication:
+      type: object
+      description: A stored publication, with its YAML exactly as it was put.
+      additionalProperties: false
+      required: [id, organizationId, configuration, version, yaml, sha256, publishedBy, publishedAt, receivedAt, collector]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        organizationId:
+          $ref: "#/components/schemas/Uuid"
+        configuration:
+          $ref: "#/components/schemas/Configuration"
+        version:
+          $ref: "#/components/schemas/Version"
+        yaml:
+          $ref: "#/components/schemas/Yaml"
+        sha256:
+          $ref: "#/components/schemas/Sha256"
+        publishedBy:
+          $ref: "#/components/schemas/Actor"
+        publishedAt:
+          type: string
+          format: date-time
+          description: When the platform published it, in UTC, with milliseconds.
+        receivedAt:
+          type: string
+          format: date-time
+          description: When this server first stored it, by its clock, in UTC, with milliseconds.
+        collector:
+          $ref: "#/components/schemas/Collector"
+    PublicationList:
+      type: object
+      additionalProperties: false
+      required: [publications, nextCursor]
+      properties:
+        publications:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/PublicationSummary"
+        nextCursor:
+          type: [string, "null"]
+          description: The `cursor` for the next page, or null on the last page.
+    FleetLabel:
+      type: string
+      description: |
+        A fleet's label, unique within its organization as written
+        (case-sensitive): 1 to 80 characters, with no whitespace at either
+        end (as Unicode counts it) and no control character anywhere (C0,
+        DEL or C1, U+0000 among them).
+      minLength: 1
+      maxLength: 80
+      pattern: "^[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]([^\\x00-\\x1f\\x7f-\\x9f]*[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000])?$"
+    FleetType:
+      type: string
+      description: |
+        `server`: collectors under the OpAMP supervisor; `kubernetes-supervisor`:
+        the supervisor in Kubernetes (its install fields are the management
+        client's, in its groups' annotations). Set at creation; it never
+        changes.
+      enum: [server, kubernetes-supervisor]
+    FleetStatus:
+      type: string
+      description: "`archived`: the agent endpoint refuses its collectors, and its tokens can't be rotated."
+      enum: [active, archived]
+    Fleet:
+      type: object
+      description: A fleet, a set of collectors that enroll with its tokens and are managed together.
+      additionalProperties: false
+      required: [id, organizationId, label, type, status, createdBy, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        organizationId:
+          $ref: "#/components/schemas/Uuid"
+        label:
+          $ref: "#/components/schemas/FleetLabel"
+        type:
+          $ref: "#/components/schemas/FleetType"
+        status:
+          $ref: "#/components/schemas/FleetStatus"
+        createdBy:
+          $ref: "#/components/schemas/Actor"
+        createdAt:
+          type: string
+          format: date-time
+          description: When this server created it, by its clock, in UTC, with milliseconds.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When its label or status last changed (createdAt until then).
+    FleetCreateRequest:
+      type: object
+      description: |
+        A fleet to create. Every field but `id` is required; the nullable
+        ones are sent as null. No other field is allowed.
+      additionalProperties: false
+      required: [label, type, rotateExpiresAt, actor]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        label:
+          $ref: "#/components/schemas/FleetLabel"
+        type:
+          $ref: "#/components/schemas/FleetType"
+        rotateExpiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: When the rotate token expires (in the future), or null for never. Kept to the millisecond.
+        actor:
+          $ref: "#/components/schemas/Actor"
+      example:
+        id: 7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+        label: edge-prod
+        type: server
+        rotateExpiresAt: "2027-04-10T00:00:00.000Z"
+        actor:
+          id: 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+          email: ana@acme.io
+    FleetUpdateRequest:
+      type: object
+      description: The fields to change, at least one. No other field is allowed.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        label:
+          $ref: "#/components/schemas/FleetLabel"
+        status:
+          $ref: "#/components/schemas/FleetStatus"
+    FleetUnchanged:
+      type: object
+      description: A create's retry, answered with the fleet alone.
+      additionalProperties: false
+      required: [fleet]
+      properties:
+        fleet:
+          $ref: "#/components/schemas/Fleet"
+    FleetCreated:
+      type: object
+      description: A created fleet, its Default group, and both tokens' bearers, answered this once.
+      additionalProperties: false
+      required: [fleet, defaultGroup, tokens]
+      properties:
+        fleet:
+          $ref: "#/components/schemas/Fleet"
+        defaultGroup:
+          $ref: "#/components/schemas/CollectorGroup"
+        tokens:
+          type: object
+          additionalProperties: false
+          required: [default, rotate]
+          properties:
+            default:
+              type: object
+              description: The default token, which never expires; a collector started with it is handed the rotate token.
+              additionalProperties: false
+              required: [id, bearer]
+              properties:
+                id:
+                  $ref: "#/components/schemas/Uuid"
+                bearer:
+                  $ref: "#/components/schemas/EnrollmentTokenBearer"
+            rotate:
+              type: object
+              description: The rotate token, on which collectors are served their configuration.
+              additionalProperties: false
+              required: [id, bearer, expiresAt]
+              properties:
+                id:
+                  $ref: "#/components/schemas/Uuid"
+                bearer:
+                  $ref: "#/components/schemas/EnrollmentTokenBearer"
+                expiresAt:
+                  type: [string, "null"]
+                  format: date-time
+                  description: When it expires, or null for never.
+    FleetSummary:
+      type: object
+      description: |
+        A fleet's collectors counted: by liveness (online last seen under 60
+        seconds ago, warning under 120, unknown under 300, offline from then
+        on) and by sync (inSync, pending, failed, drifted, unassigned: as a
+        collector's `sync`), each set adding up to `collectors`; the latest
+        time any of them was seen; and the fleet's rotate tokens' state. All
+        at this server's clock, at the time of the read.
+      additionalProperties: false
+      required: [collectors, online, warning, unknown, offline, inSync, pending, failed, drifted, unassigned, lastSeenAt, rotateToken]
+      properties:
+        collectors:
+          type: integer
+          minimum: 0
+        online:
+          type: integer
+          minimum: 0
+        warning:
+          type: integer
+          minimum: 0
+        unknown:
+          type: integer
+          minimum: 0
+        offline:
+          type: integer
+          minimum: 0
+        inSync:
+          type: integer
+          minimum: 0
+        pending:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        drifted:
+          type: integer
+          minimum: 0
+        unassigned:
+          type: integer
+          minimum: 0
+        lastSeenAt:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            The latest `lastSeenAt` of the fleet's collectors, in UTC, with
+            milliseconds; null when the fleet has no collector.
+        rotateToken:
+          $ref: "#/components/schemas/FleetRotateToken"
+    FleetRotateToken:
+      type: [object, "null"]
+      description: |
+        The fleet's rotate tokens at the time of the read, or null when it
+        has no valid rotate token (each one revoked or past its expiry). A token is valid when it isn't
+        revoked and its expiry, if any, is after the read; a default token
+        never counts.
+      additionalProperties: false
+      required: [expiresAt, graceEndsAt, validCount]
+      properties:
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            When the current rotate token (the one collectors are pushed)
+            expires, or null for never.
+        graceEndsAt:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            The latest expiry among the valid rotate tokens in their grace
+            (rotated, and still accepted until then) other than the current
+            one; null when there is none. When the current token is revoked
+            during a rotation's grace, a token in its grace becomes current,
+            and nothing rotates towards it.
+        validCount:
+          type: integer
+          minimum: 1
+          description: How many of the fleet's rotate tokens are valid.
+    FleetDetail:
+      type: object
+      description: A fleet as its reads answer it, with its summary.
+      additionalProperties: false
+      required: [id, organizationId, label, type, status, createdBy, createdAt, updatedAt, summary]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        organizationId:
+          $ref: "#/components/schemas/Uuid"
+        label:
+          $ref: "#/components/schemas/FleetLabel"
+        type:
+          $ref: "#/components/schemas/FleetType"
+        status:
+          $ref: "#/components/schemas/FleetStatus"
+        createdBy:
+          $ref: "#/components/schemas/Actor"
+        createdAt:
+          type: string
+          format: date-time
+          description: When this server created it, by its clock, in UTC, with milliseconds.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When its label or status last changed (createdAt until then).
+        summary:
+          $ref: "#/components/schemas/FleetSummary"
+    FleetList:
+      type: object
+      additionalProperties: false
+      required: [fleets, nextCursor]
+      properties:
+        fleets:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/FleetDetail"
+        nextCursor:
+          type: [string, "null"]
+          description: The `cursor` for the next page, or null on the last page.
+    CollectorGroupName:
+      type: string
+      description: |
+        A group's name, unique within its fleet as written (case-sensitive):
+        1 to 80 characters, with no whitespace at either end (as Unicode
+        counts it) and no control character anywhere (C0, DEL or C1, U+0000
+        among them). The Default group is named "Default".
+      minLength: 1
+      maxLength: 80
+      pattern: "^[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]([^\\x00-\\x1f\\x7f-\\x9f]*[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000])?$"
+    CollectorGroupAnnotations:
+      type: [object, "null"]
+      description: |
+        The management client's own data about the group, on any fleet's
+        group: stored and returned unchanged, and never read by this server
+        (as Kubernetes' annotations; each client keeps its data under keys
+        of its own). A JSON object, or null, of at most 16,384 bytes in each
+        of two forms: its canonical form (no insignificant space, object
+        keys sorted at every level, U+2028 and U+2029 escaped as `\u2028`
+        and `\u2029`, six bytes each), and the database's text of it (a
+        space after each comma and colon outside a string, U+2028 and
+        U+2029 written as the characters, three bytes each). It is answered
+        in the canonical form, so its keys come back sorted whatever order
+        they were sent in; a key sent twice keeps its last value, and a lone
+        escaped surrogate (`"\ud800"`) comes back as U+FFFD. A number with
+        an exponent or a negative zero, and U+0000 in a string or a key, are
+        refused (400): the database would store them otherwise.
+    CollectorGroup:
+      type: object
+      description: A fleet's collector group.
+      additionalProperties: false
+      required: [id, fleetId, name, isDefault, assignedPublicationId, annotations, variableGroupId, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        fleetId:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/CollectorGroupName"
+        isDefault:
+          type: boolean
+          description: Whether it is the fleet's Default group, made with the fleet, never renamed or deleted. A collector names its group; one naming none is refused.
+        assignedPublicationId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          description: The published version served to the group's collectors without a pin of their own, or null.
+        annotations:
+          $ref: "#/components/schemas/CollectorGroupAnnotations"
+        variableGroupId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          description: |
+            The variable group its collectors' text is filled in with:
+            for each variable, a pinned variable group's override first,
+            then this one's, then the organization's value. Or null.
+        createdAt:
+          type: string
+          format: date-time
+          description: When it was created, in UTC, with milliseconds.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When it last changed (createdAt until then).
+    CollectorGroupCreateRequest:
+      type: object
+      description: A group to create. `name` is required; every other field may be left out or null (unset). No other field is allowed.
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          $ref: "#/components/schemas/CollectorGroupName"
+        assignedPublicationId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        annotations:
+          $ref: "#/components/schemas/CollectorGroupAnnotations"
+        variableGroupId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    CollectorGroupUpdateRequest:
+      type: object
+      description: The fields to change, at least one; null clears a field. No other field is allowed.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          $ref: "#/components/schemas/CollectorGroupName"
+        assignedPublicationId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        annotations:
+          $ref: "#/components/schemas/CollectorGroupAnnotations"
+        variableGroupId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    CollectorGroupList:
+      type: object
+      additionalProperties: false
+      required: [groups]
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/CollectorGroup"
+    EnrollmentTokenBearer:
+      type: string
+      description: |
+        The bearer a collector presents (`Authorization: Bearer …`):
+        base64 of a 12-byte nonce, the AES-256-GCM ciphertext of
+        {"token_id","deployment_id"} and its 16-byte tag, under the server's
+        current key. Never stored and never logged; a secret.
+      minLength: 1
+      pattern: "^[A-Za-z0-9+/]+={0,2}$"
+    EnrollmentTokenKind:
+      type: string
+      description: "`default`: a fleet's enrollment token, never expiring, served no configuration; `rotate`: the token collectors are served configuration on."
+      enum: [default, rotate]
+    EnrollmentToken:
+      type: object
+      description: An enrollment token, without its bearer.
+      additionalProperties: false
+      required: [id, fleetId, kind, expiresAt, revokedAt, doRefresh, createdBy, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        fleetId:
+          $ref: "#/components/schemas/Uuid"
+        kind:
+          $ref: "#/components/schemas/EnrollmentTokenKind"
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: When it stops authenticating, or null for never.
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+          description: When it was revoked, or null.
+        doRefresh:
+          type: boolean
+          description: Whether a collector authenticating with it is pushed the fleet's current rotate token (a rotated token in its grace period).
+        createdBy:
+          $ref: "#/components/schemas/Actor"
+        createdAt:
+          type: string
+          format: date-time
+          description: When it was made, in UTC, with milliseconds.
+    EnrollmentTokenListed:
+      type: object
+      description: An enrollment token in the list, with its collectors seen on it in the last 5 minutes.
+      additionalProperties: false
+      required: [id, fleetId, kind, expiresAt, revokedAt, doRefresh, createdBy, createdAt, activeCollectors]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        fleetId:
+          $ref: "#/components/schemas/Uuid"
+        kind:
+          $ref: "#/components/schemas/EnrollmentTokenKind"
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+        doRefresh:
+          type: boolean
+        createdBy:
+          $ref: "#/components/schemas/Actor"
+        createdAt:
+          type: string
+          format: date-time
+        activeCollectors:
+          type: integer
+          minimum: 0
+          description: How many of the fleet's collectors were last seen on it in the last 5 minutes.
+    EnrollmentTokenList:
+      type: object
+      additionalProperties: false
+      required: [tokens]
+      properties:
+        tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnrollmentTokenListed"
+    EnrollmentTokenRotateRequest:
+      type: object
+      description: A rotation. Every field is required; `expiresAt` and `actor` may be null. No other field is allowed.
+      additionalProperties: false
+      required: [expiresAt, graceEndsAt, actor]
+      properties:
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: When the new rotate token expires, or null for never.
+        graceEndsAt:
+          type: string
+          format: date-time
+          description: When the token it replaces stops authenticating (or at its own expiry, if sooner); in the future, and not after `expiresAt`.
+        actor:
+          $ref: "#/components/schemas/Actor"
+      example:
+        expiresAt: "2027-10-12T00:00:00.000Z"
+        graceEndsAt: "2026-10-13T09:00:00.000Z"
+        actor:
+          id: 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+          email: ana@acme.io
+    EnrollmentTokenRotated:
+      type: object
+      description: The new rotate token, its bearer, and the token put in its grace period (null when the fleet had no valid rotate token).
+      additionalProperties: false
+      required: [id, bearer, expiresAt, predecessorId]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        bearer:
+          $ref: "#/components/schemas/EnrollmentTokenBearer"
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        predecessorId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    EnrollmentTokenRevealed:
+      type: object
+      description: A fresh bearer for the token.
+      additionalProperties: false
+      required: [id, kind, bearer, expiresAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        kind:
+          $ref: "#/components/schemas/EnrollmentTokenKind"
+        bearer:
+          $ref: "#/components/schemas/EnrollmentTokenBearer"
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+    EnrollmentTokenEventKind:
+      type: string
+      description: "`issued`: made (a fleet's create, a rotation, a new default token); `viewed`: revealed; `rotated`: put in its grace period by a rotation; `revoked`: revoked."
+      enum: [issued, viewed, rotated, revoked]
+    EnrollmentTokenEvent:
+      type: object
+      description: One event of one of the fleet's tokens. Never a bearer.
+      additionalProperties: false
+      required: [id, tokenId, event, actor, occurredAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        tokenId:
+          $ref: "#/components/schemas/Uuid"
+        event:
+          $ref: "#/components/schemas/EnrollmentTokenEventKind"
+        actor:
+          $ref: "#/components/schemas/Actor"
+        occurredAt:
+          type: string
+          format: date-time
+          description: When it happened, in UTC, with milliseconds.
+    EnrollmentTokenEventList:
+      type: object
+      additionalProperties: false
+      required: [events, nextCursor]
+      properties:
+        events:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/EnrollmentTokenEvent"
+        nextCursor:
+          type: [string, "null"]
+          description: The `cursor` for the next page, or null on the last page.
+    ActorRequest:
+      type: object
+      description: Who acts, or null for no person, recorded as the operation says. No other field is allowed.
+      additionalProperties: false
+      required: [actor]
+      properties:
+        actor:
+          $ref: "#/components/schemas/Actor"
+    CollectorInstanceName:
+      type: string
+      description: |
+        A collector's name, unique within its organization as written
+        (case-sensitive): 1 to 200 characters, with no whitespace at either
+        end (as Unicode counts it) and no control character anywhere (C0,
+        DEL or C1: the name is sent back to the collector as its
+        ServerName header, which can't hold one). A collector is named on
+        enrollment from its ServerName header when that is such a name and
+        free, else a petname.
+      minLength: 1
+      maxLength: 200
+      pattern: "^[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]([^\\x00-\\x1f\\x7f-\\x9f]*[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000])?$"
+    CollectorInstancePin:
+      type: [object, "null"]
+      description: |
+        A published version of the organization's (`publication`, the one
+        kind: any other is an invalid request), or null for none.
+      additionalProperties: false
+      required: [kind, id]
+      properties:
+        kind:
+          type: string
+          enum: [publication]
+        id:
+          $ref: "#/components/schemas/Uuid"
+    CollectorInstance:
+      type: object
+      description: |
+        A collector (a collector instance) of a fleet. `resolution` is what
+        resolves for it (its pin, else its group's assigned published
+        version; null for nothing: it keeps running what it has, and is sent
+        nothing). `served` is what it was last served, or found already
+        running (its `kind` and `id` null once that published version is
+        deleted). `effective` is its last reported status of what
+        it was served, by hash, with the collector's own error text when it
+        failed. `reported` is what its agent reported of itself. `liveness`
+        and `sync` are at the server's clock: liveness by how long ago it
+        was last seen (online under 60 seconds, warning under 120, unknown
+        under 300, offline from then on); sync `unassigned` with nothing
+        resolved, `pending` until what resolves is served and reported on,
+        then `inSync`, `failed` or `drifted` (applied on another hash).
+      additionalProperties: false
+      required: [id, instanceUid, name, fleetId, groupId, pin, pinnedVariableGroupId, resolution, served, effective, reported,
+        enrollmentTokenId, lastSeenAt, liveness, sync, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        instanceUid:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/CollectorInstanceName"
+        fleetId:
+          $ref: "#/components/schemas/Uuid"
+        groupId:
+          $ref: "#/components/schemas/Uuid"
+        pin:
+          $ref: "#/components/schemas/CollectorInstancePin"
+        pinnedVariableGroupId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          description: |
+            A variable group pinned on it, independent of `pin`: its
+            overrides win over its group's variable group's. Or null.
+        resolution:
+          type: [object, "null"]
+          additionalProperties: false
+          required: [from, id, sha256]
+          properties:
+            from:
+              type: string
+              enum: [pinnedPublication, groupPublication]
+            id:
+              $ref: "#/components/schemas/Uuid"
+            sha256:
+              $ref: "#/components/schemas/Sha256"
+        served:
+          type: [object, "null"]
+          additionalProperties: false
+          required: [kind, id, sha256, at]
+          properties:
+            kind:
+              type: [string, "null"]
+              enum: [publication, null]
+            id:
+              type: [string, "null"]
+              format: uuid
+              pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            sha256:
+              $ref: "#/components/schemas/Sha256"
+            at:
+              type: [string, "null"]
+              format: date-time
+              description: |
+                When the collector was last delivered a configuration or,
+                for one found already running those bytes and never
+                delivered one, when it was found so: a retarget to bytes it
+                already runs keeps the earlier delivery's time. Always set,
+                though the type allows null.
+        effective:
+          type: [object, "null"]
+          additionalProperties: false
+          required: [sha256, status, error, at]
+          properties:
+            sha256:
+              $ref: "#/components/schemas/Sha256"
+            status:
+              type: string
+              enum: [applied, applying, failed]
+            error:
+              type: [string, "null"]
+              description: The collector's own error text when it failed, at most 8 KiB; null otherwise.
+            at:
+              type: string
+              format: date-time
+        reported:
+          type: object
+          additionalProperties: false
+          required: [collectorVersion, ip, hostIp, attributes]
+          properties:
+            collectorVersion:
+              type: [string, "null"]
+            ip:
+              type: [string, "null"]
+            hostIp:
+              type: [string, "null"]
+            attributes:
+              type: [object, "null"]
+              description: Its agent description's attributes, as reported.
+              additionalProperties:
+                type: string
+        enrollmentTokenId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          description: The fleet's token it last authenticated with, or null once that token is gone.
+        lastSeenAt:
+          type: string
+          format: date-time
+        liveness:
+          type: string
+          enum: [online, warning, unknown, offline]
+        sync:
+          type: string
+          enum: [inSync, pending, failed, drifted, unassigned]
+        createdAt:
+          type: string
+          format: date-time
+          description: When it enrolled.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When an operator last changed it (createdAt until then).
+    CollectorInstanceList:
+      type: object
+      additionalProperties: false
+      required: [collectors, nextCursor]
+      properties:
+        collectors:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/CollectorInstance"
+        nextCursor:
+          type: [string, "null"]
+          description: The `cursor` for the next page, or null on the last page.
+    CollectorInstanceUpdateRequest:
+      type: object
+      description: |
+        The fields to change, at least one; `pin` null unpins, and
+        `pinnedVariableGroupId` null returns it to its group's variable
+        group. No other field is allowed.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          $ref: "#/components/schemas/CollectorInstanceName"
+        groupId:
+          $ref: "#/components/schemas/Uuid"
+        pin:
+          $ref: "#/components/schemas/CollectorInstancePin"
+        pinnedVariableGroupId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    CollectorInstanceBulkPinRequest:
+      type: object
+      description: |
+        The collectors to change, and at least one of `pin` (null unpins)
+        and `pinnedVariableGroupId` (null returns each to its group's
+        variable group); a field left out leaves each collector's as it is.
+        No other field is allowed.
+      additionalProperties: false
+      required: [collectorIds]
+      minProperties: 2
+      properties:
+        collectorIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/Uuid"
+        pin:
+          $ref: "#/components/schemas/CollectorInstancePin"
+        pinnedVariableGroupId:
+          type: [string, "null"]
+          format: uuid
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    CollectorInstanceBulkPinResult:
+      type: object
+      additionalProperties: false
+      required: [updated, notFound]
+      properties:
+        updated:
+          type: array
+          description: The fleet's collectors now changed as asked, sorted.
+          items:
+            $ref: "#/components/schemas/Uuid"
+        notFound:
+          type: array
+          description: The ids the fleet doesn't hold, sorted.
+          items:
+            $ref: "#/components/schemas/Uuid"
+    CollectorInstanceError:
+      type: object
+      description: One failure the collector reported.
+      additionalProperties: false
+      required: [id, reportedAt, configSha256, message]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        reportedAt:
+          type: string
+          format: date-time
+        configSha256:
+          type: [string, "null"]
+          description: The hash of the configuration it failed to apply, or null.
+          pattern: "^[0-9a-f]{64}$"
+        message:
+          type: string
+          description: The collector's own text, at most 8 KiB.
+          minLength: 1
+    CollectorInstanceErrorList:
+      type: object
+      additionalProperties: false
+      required: [errors, nextCursor]
+      properties:
+        errors:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/CollectorInstanceError"
+        nextCursor:
+          type: [string, "null"]
+          description: The `cursor` for the next page, or null on the last page.
+    OrganizationLimits:
+      type: object
+      description: An organization's limits; null for one unset. Both fields are required; no other is allowed.
+      additionalProperties: false
+      required: [maxCollectors, requestsPerMinute]
+      properties:
+        maxCollectors:
+          type: [integer, "null"]
+          description: The most collectors it may have enrolled, or null for no cap. Any JSON number with a whole value counts.
+          minimum: 0
+          maximum: 2147483647
+        requestsPerMinute:
+          type: [integer, "null"]
+          description: The agent requests a minute it may make to each pod, or null for the server's default. Any JSON number with a whole value counts.
+          minimum: 1
+          maximum: 2147483647
+      example:
+        maxCollectors: 500
+        requestsPerMinute: null
+    ConfigurationUsage:
+      type: object
+      description: What uses each of a configuration's published versions.
+      additionalProperties: false
+      required: [configurationId, inUse, publications]
+      properties:
+        configurationId:
+          $ref: "#/components/schemas/Uuid"
+        inUse:
+          type: boolean
+          description: Whether a collector group or a collector uses any of them.
+        publications:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, version, publishedAt, groups, pinnedCollectors]
+            properties:
+              id:
+                $ref: "#/components/schemas/Uuid"
+              version:
+                $ref: "#/components/schemas/Version"
+              publishedAt:
+                type: string
+                format: date-time
+              groups:
+                type: array
+                description: The collector groups assigned it, by fleet and then group.
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [fleetId, groupId]
+                  properties:
+                    fleetId:
+                      $ref: "#/components/schemas/Uuid"
+                    groupId:
+                      $ref: "#/components/schemas/Uuid"
+              pinnedCollectors:
+                type: integer
+                minimum: 0
+                description: How many collectors are pinned to it.
+    VariableName:
+      type: string
+      description: |
+        A variable's name, the NAME of its references `${org:NAME}`: an
+        ASCII letter or an underscore, then ASCII letters, digits or
+        underscores, at most 128 characters, unique within its organization
+        as written (case-sensitive).
+      minLength: 1
+      maxLength: 128
+      pattern: "^[A-Za-z_][A-Za-z0-9_]*$"
+    VariableValue:
+      type: string
+      description: |
+        A variable's value, or an override's: 0 to 1,024 characters on one
+        line, with no control character (C0, DEL or C1: a tab, a line feed
+        and a carriage return among them) and neither U+2028 nor U+2029.
+        Filled in literally: each `$` reaches the collector as written.
+      maxLength: 1024
+      pattern: "^[^\\x00-\\x1f\\x7f-\\x9f\u2028\u2029]*$"
+    VariableDescription:
+      type: [string, "null"]
+      description: |
+        A variable's or a variable group's description, or null: 1 to 1,000
+        characters, with no whitespace at either end (as Unicode counts it)
+        and no control character anywhere.
+      minLength: 1
+      maxLength: 1000
+      pattern: "^[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]([^\\x00-\\x1f\\x7f-\\x9f]*[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000])?$"
+    ApiKeyName:
+      type: string
+      description: |
+        What the secret's holder calls the key, not unique: 1 to 80
+        characters, with no whitespace at either end (as Unicode counts it)
+        and no control character anywhere.
+      minLength: 1
+      maxLength: 80
+      pattern: "^[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]([^\\x00-\\x1f\\x7f-\\x9f]*[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000])?$"
+    ApiKeyDescription:
+      type: [string, "null"]
+      description: |
+        What the key is for, or null: 1 to 1,000 characters, with no
+        whitespace at either end (as Unicode counts it) and no control
+        character anywhere.
+      minLength: 1
+      maxLength: 1000
+      pattern: "^[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]([^\\x00-\\x1f\\x7f-\\x9f]*[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000])?$"
+    ApiKeyOrganizationIds:
+      type: [array, "null"]
+      description: |
+        The organizations the key opens, each once, or null for every
+        organization, registered now or later. In a reply, those still
+        registered, in byte order: a deleted organization leaves every key,
+        and registering its id again doesn't bring it back.
+      minItems: 1
+      maxItems: 1000
+      uniqueItems: true
+      items:
+        $ref: "#/components/schemas/Uuid"
+    ApiKey:
+      type: object
+      description: |
+        An API key, never the key itself. `status` is `active`, `expired`
+        or `revoked` at the server's clock. `lastUsedAt` is when it last
+        authenticated a request, or null.
+      additionalProperties: false
+      required: [id, name, description, organizationIds, status, expiresAt, revokedAt, lastUsedAt, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/ApiKeyName"
+        description:
+          $ref: "#/components/schemas/ApiKeyDescription"
+        organizationIds:
+          type: [array, "null"]
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/Uuid"
+        status:
+          type: string
+          enum: [active, expired, revoked]
+        expiresAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+        lastUsedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ApiKeyCreated:
+      type: object
+      description: |
+        A new key, and `key`, the key itself, answered this once: send it as
+        `Authorization: Bearer <key>`.
+      additionalProperties: false
+      required: [id, name, description, organizationIds, status, expiresAt, revokedAt, lastUsedAt, createdAt, key]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/ApiKeyName"
+        description:
+          $ref: "#/components/schemas/ApiKeyDescription"
+        organizationIds:
+          type: [array, "null"]
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/Uuid"
+        status:
+          type: string
+          const: active
+        expiresAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: "null"
+        lastUsedAt:
+          type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        key:
+          type: string
+          pattern: "^opk_[0-9a-f]{32}_[A-Za-z0-9_-]{43}$"
+    ApiKeyList:
+      type: object
+      additionalProperties: false
+      required: [apiKeys]
+      properties:
+        apiKeys:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKey"
+    ApiKeyCreateRequest:
+      type: object
+      description: A key to mint. Every field is required; no other is allowed.
+      additionalProperties: false
+      required: [name, description, organizationIds, expiresAt]
+      properties:
+        name:
+          $ref: "#/components/schemas/ApiKeyName"
+        description:
+          $ref: "#/components/schemas/ApiKeyDescription"
+        organizationIds:
+          $ref: "#/components/schemas/ApiKeyOrganizationIds"
+        expiresAt:
+          type: string
+          format: date-time
+          description: When it stops authenticating, in the future and at most 2 years away.
+      example:
+        name: deploy pipeline
+        description: Publishes the edge configurations from CI.
+        organizationIds: [5d6c7b8a-9e0f-4a1b-8c2d-3e4f5a6b7c8d]
+        expiresAt: "2027-04-30T00:00:00.000Z"
+    ApiKeyUpdateRequest:
+      type: object
+      description: |
+        The fields to change, at least one of `name` and `description` (null
+        removes the description). No other field is allowed.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          $ref: "#/components/schemas/ApiKeyName"
+        description:
+          $ref: "#/components/schemas/ApiKeyDescription"
+    VariableGroupName:
+      type: string
+      description: |
+        A variable group's name, unique within its organization as written
+        (case-sensitive): 1 to 200 characters, with no whitespace at either
+        end (as Unicode counts it) and no control character anywhere.
+      minLength: 1
+      maxLength: 200
+      pattern: "^[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]([^\\x00-\\x1f\\x7f-\\x9f]*[^\\x00-\\x20\\x7f-\\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000])?$"
+    Variable:
+      type: object
+      description: One of the organization's variables.
+      additionalProperties: false
+      required: [id, name, value, description, changedBy, changedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/VariableName"
+        value:
+          $ref: "#/components/schemas/VariableValue"
+        description:
+          $ref: "#/components/schemas/VariableDescription"
+        changedBy:
+          $ref: "#/components/schemas/Actor"
+        changedAt:
+          type: string
+          format: date-time
+          description: When anything of it last changed, in UTC, with milliseconds.
+    VariableList:
+      type: object
+      additionalProperties: false
+      required: [variables]
+      properties:
+        variables:
+          type: array
+          maxItems: 150
+          items:
+            $ref: "#/components/schemas/Variable"
+    VariableCreateRequest:
+      type: object
+      description: A variable to create. `id` is optional; no other field is allowed.
+      additionalProperties: false
+      required: [name, value, description, actor]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/VariableName"
+        value:
+          $ref: "#/components/schemas/VariableValue"
+        description:
+          $ref: "#/components/schemas/VariableDescription"
+        actor:
+          $ref: "#/components/schemas/Actor"
+    VariableUpdateRequest:
+      type: object
+      description: |
+        The fields to change, at least one of `name`, `value` and
+        `description` (null removes the description), and who changes them.
+        No other field is allowed.
+      additionalProperties: false
+      required: [actor]
+      minProperties: 2
+      properties:
+        name:
+          $ref: "#/components/schemas/VariableName"
+        value:
+          $ref: "#/components/schemas/VariableValue"
+        description:
+          $ref: "#/components/schemas/VariableDescription"
+        actor:
+          $ref: "#/components/schemas/Actor"
+    VariableGroup:
+      type: object
+      description: |
+        One of the organization's variable groups: it holds overrides only.
+        `overrideCount` counts them; `usage` is what uses it: the collector
+        groups bound to it and the collectors it is pinned on. `changedBy` and
+        `changedAt` also move when an override in it is set, changed or reset,
+        to that change's actor and time.
+      additionalProperties: false
+      required: [id, name, description, overrideCount, usage, changedBy, changedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/VariableGroupName"
+        description:
+          $ref: "#/components/schemas/VariableDescription"
+        overrideCount:
+          type: integer
+          minimum: 0
+          maximum: 150
+        usage:
+          type: object
+          additionalProperties: false
+          required: [collectorGroups, pinnedCollectors]
+          properties:
+            collectorGroups:
+              type: integer
+              minimum: 0
+            pinnedCollectors:
+              type: integer
+              minimum: 0
+        changedBy:
+          $ref: "#/components/schemas/Actor"
+        changedAt:
+          type: string
+          format: date-time
+          description: When it, or an override in it, last changed, in UTC, with milliseconds.
+    VariableGroupList:
+      type: object
+      additionalProperties: false
+      required: [variableGroups]
+      properties:
+        variableGroups:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/VariableGroup"
+    VariableGroupCreateRequest:
+      type: object
+      description: A variable group to create. `id` is optional; no other field is allowed.
+      additionalProperties: false
+      required: [name, description, actor]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          $ref: "#/components/schemas/VariableGroupName"
+        description:
+          $ref: "#/components/schemas/VariableDescription"
+        actor:
+          $ref: "#/components/schemas/Actor"
+    VariableGroupUpdateRequest:
+      type: object
+      description: |
+        The fields to change, at least one of `name` and `description` (null
+        removes the description), and who changes them. No other field is
+        allowed.
+      additionalProperties: false
+      required: [actor]
+      minProperties: 2
+      properties:
+        name:
+          $ref: "#/components/schemas/VariableGroupName"
+        description:
+          $ref: "#/components/schemas/VariableDescription"
+        actor:
+          $ref: "#/components/schemas/Actor"
+    VariableGroupOverride:
+      type: object
+      description: A variable group's override of one variable, always with a value.
+      additionalProperties: false
+      required: [variableId, value, changedBy, changedAt]
+      properties:
+        variableId:
+          $ref: "#/components/schemas/Uuid"
+        value:
+          $ref: "#/components/schemas/VariableValue"
+        changedBy:
+          $ref: "#/components/schemas/Actor"
+        changedAt:
+          type: string
+          format: date-time
+    VariableGroupOverrideRequest:
+      type: object
+      description: The override's value and who sets it. No other field is allowed.
+      additionalProperties: false
+      required: [value, actor]
+      properties:
+        value:
+          $ref: "#/components/schemas/VariableValue"
+        actor:
+          $ref: "#/components/schemas/Actor"
+    VariableGroupDetail:
+      type: object
+      additionalProperties: false
+      required: [variableGroup, overrides]
+      properties:
+        variableGroup:
+          $ref: "#/components/schemas/VariableGroup"
+        overrides:
+          type: array
+          description: Its overrides, by their variable's name compared as bytes.
+          maxItems: 150
+          items:
+            $ref: "#/components/schemas/VariableGroupOverride"
+    CollectorGroupRef:
+      type: object
+      description: A collector group, by its fleet and its id.
+      additionalProperties: false
+      required: [fleetId, groupId]
+      properties:
+        fleetId:
+          $ref: "#/components/schemas/Uuid"
+        groupId:
+          $ref: "#/components/schemas/Uuid"
+    VariableInUseDetails:
+      type: object
+      description: |
+        `variable_in_use`'s details: the used published versions that
+        reference the variable's name, by id, each with the collector groups
+        assigned it (by fleet, then group) and how many collectors are pinned
+        to it. At most 100 entries in all, an entry being one of a version's
+        groups, or a version with no group (pinned only); a listed version
+        keeps its own `pinnedCollectors`. The totals are exact, over every
+        use.
+      additionalProperties: false
+      required: [usedBy, totalPublications, totalGroups, totalPinnedCollectors]
+      properties:
+        usedBy:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [publicationId, groups, pinnedCollectors]
+            properties:
+              publicationId:
+                $ref: "#/components/schemas/Uuid"
+              groups:
+                type: array
+                maxItems: 100
+                items:
+                  $ref: "#/components/schemas/CollectorGroupRef"
+              pinnedCollectors:
+                type: integer
+                minimum: 0
+        totalPublications:
+          type: integer
+          minimum: 0
+        totalGroups:
+          type: integer
+          minimum: 0
+        totalPinnedCollectors:
+          type: integer
+          minimum: 0
+    VariableGroupInUseDetails:
+      type: object
+      description: |
+        `variable_group_in_use`'s details: the collector groups bound to the
+        variable group, at most 100 by fleet and then group, with their
+        exact total, and how many collectors have it pinned.
+      additionalProperties: false
+      required: [collectorGroups, totalCollectorGroups, pinnedCollectors]
+      properties:
+        collectorGroups:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/CollectorGroupRef"
+        totalCollectorGroups:
+          type: integer
+          minimum: 0
+        pinnedCollectors:
+          type: integer
+          minimum: 0
+    VariablesUndefinedDetails:
+      type: object
+      description: |
+        `variables_undefined`'s details: the names the published version
+        references that no variable of the organization has, at most 100 in
+        byte order, with their exact total. A published version can't
+        reference a longer name than a variable may have.
+      additionalProperties: false
+      required: [names, totalNames]
+      properties:
+        names:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/VariableName"
+        totalNames:
+          type: integer
+          minimum: 0
+    Error:
+      type: object
+      description: The error envelope.
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - unauthorized
+                - invalid_request
+                - not_found
+                - organization_not_found
+                - organization_conflict
+                - publication_conflict
+                - payload_too_large
+                - sha256_mismatch
+                - internal_error
+                - fleet_not_found
+                - fleet_conflict
+                - fleet_label_taken
+                - fleet_archived
+                - collector_group_not_found
+                - collector_group_name_taken
+                - collector_group_is_default
+                - enrollment_token_not_found
+                - enrollment_token_revoked
+                - enrollment_token_expired
+                - enrollment_token_default_exists
+                - publication_not_found
+                - collector_not_found
+                - collector_name_taken
+                - publication_in_use
+                - delete_in_progress
+                - variable_not_found
+                - variable_group_not_found
+                - variable_name_taken
+                - variable_group_name_taken
+                - variable_in_use
+                - variable_group_in_use
+                - variables_undefined
+                - variable_limit_reached
+                - variable_group_limit_reached
+                - variable_conflict
+                - variable_group_conflict
+                - forbidden
+                - api_key_not_found
+                - api_key_limit_reached
+            message:
+              type: string
+            details:
+              description: |
+                Only on `variable_in_use`, `variable_group_in_use` and
+                `variables_undefined`: what uses the variable or the
+                variable group, or the names no variable has. Ids, counts
+                and variable names, never a value.
+              oneOf:
+                - $ref: "#/components/schemas/VariableInUseDetails"
+                - $ref: "#/components/schemas/VariableGroupInUseDetails"
+                - $ref: "#/components/schemas/VariablesUndefinedDetails"

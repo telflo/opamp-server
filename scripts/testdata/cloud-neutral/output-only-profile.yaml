@@ -1,0 +1,14 @@
+# A fixture profile for check-chart-cloud-neutral.test.sh: a cloud annotation
+# passed through a values map, so it is only in the rendered output.
+server:
+  publicUrl: https://opamp.example.com/opamp/api/v1
+auth:
+  existingSecret: opamp-server-credentials
+postgres:
+  auth:
+    existingSecret: opamp-postgres-credentials
+service:
+  agent:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true"

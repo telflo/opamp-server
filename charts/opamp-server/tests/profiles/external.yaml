@@ -1,0 +1,12 @@
+# A Postgres of your own, the chart composing the URLs from the passwords.
+server:
+  publicUrl: https://opamp.example.com/opamp/api/v1
+auth:
+  existingSecret: opamp-server-credentials
+postgres:
+  enabled: false
+externalDatabase:
+  host: db.example.com
+  port: 5433
+  database: opamp_db
+  sslmode: verify-full

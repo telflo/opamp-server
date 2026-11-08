@@ -1,0 +1,192 @@
+# The opamp-server chart's values. README.md describes each one.
+#
+# Nothing secret goes here, ever: every credential is read from a Secret you
+# create before installing (README.md, "Install"), named by `existingSecret`.
+# The chart never renders a Secret and never generates a value.
+
+# Names. The resources are named <fullname>, <fullname>-agent,
+# <fullname>-management, <fullname>-postgres and so on. fullname is the
+# release's name, followed by "-opamp-server" unless the release's name
+# already holds it, cut to 43 characters.
+nameOverride: ""
+fullnameOverride: ""
+
+# The server's image. The reference is <repository>:<tag>@<digest>, without
+# "@<digest>" when digest is empty. An empty tag is the chart's appVersion.
+image:
+  repository: ghcr.io/telflo/opamp-server
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+# Pull secrets (their names) for the pods, for an image in a private
+# registry: for example [{name: my-registry-pull}].
+imagePullSecrets: []
+
+# serve drains for server.shutdownDrainSeconds (5 by default), gives
+# requests in flight 10 s and 2 s more, then flushes telemetry for up to
+# 10 s: at least 30, and at least the drain plus 22 (the chart refuses less).
+terminationGracePeriodSeconds: 30
+
+# The server's Secret (required). Its keys:
+#   management-secret          required
+#   encryption-key             required (mounted as a file)
+#   owner-password             required when the chart composes the database
+#   runtime-password           URLs (always, with the bundled Postgres)
+#   management-secrets-previous  optional
+#   encryption-keys-previous     required while encryptionKeysPrevious.enabled
+auth:
+  existingSecret: ""
+  # During an encryption key rotation: true mounts the Secret's
+  # encryption-keys-previous as a file (OPAMP_ENCRYPTION_KEYS_PREVIOUS_FILE).
+  # Set it back to false once the rotation is done (README.md, "Rotating a
+  # secret").
+  encryptionKeysPrevious:
+    enabled: false
+
+server:
+  # Required. The agent endpoint's public URL, as collectors reach it
+  # (OPAMP_SERVER_URL): every collector is handed it and polls it from then
+  # on. For example https://opamp.example.com/opamp/api/v1.
+  publicUrl: ""
+
+  # The two components, each its own Deployment (<fullname>-agent,
+  # <fullname>-management) running `serve agent` or `serve management` on
+  # the same image and database. Any number of pods of either share the
+  # database; `migrate up` takes a lock, so pods starting together never
+  # migrate at once. replicas 0 stops that component: the agent endpoint's
+  # collectors keep their last configuration, and the management API's
+  # callers are refused, until it runs again.
+  agent:
+    replicas: 1
+    # resources for its serve container and init containers (migrate, and
+    # wait-for-postgres with the bundled Postgres).
+    resources: {}
+    podDisruptionBudget:
+      enabled: false
+      # Exactly one of the two.
+      minAvailable: null
+      maxUnavailable: 1
+    tls:
+      # A kubernetes.io/tls Secret's name (tls.crt, tls.key): the agent
+      # endpoint then speaks HTTPS. Empty: plain HTTP, for a load balancer
+      # that terminates TLS in front of it.
+      secretName: ""
+  management:
+    replicas: 1
+    resources: {}
+    podDisruptionBudget:
+      enabled: false
+      minAvailable: null
+      maxUnavailable: 1
+    tls:
+      # A kubernetes.io/tls Secret's name: the management API then speaks
+      # HTTPS. Empty: plain HTTP.
+      secretName: ""
+
+  # The server's tunables. null leaves a setting unset, so the server's own
+  # default applies (README.md lists each default). The heartbeat and the
+  # limits reach the agent endpoint's pods only; the drain both.
+  heartbeatIntervalSeconds: null
+  defaultRequestsPerMinute: null
+  collectorRequestsPerMinute: null
+  maxConcurrentRequests: null
+  maxConcurrentRequestsPerOrganization: null
+  shutdownDrainSeconds: null
+
+  # Telemetry over OTLP/gRPC: off while otlpEndpoint is empty.
+  telemetry:
+    otlpEndpoint: ""
+    serviceName: ""
+    resourceAttributes: ""
+
+# More environment variables for both components' serve containers: plain values with
+# `value` (literal: a $(…) in one isn't expanded); anything secret only
+# through `valueFrom` (a secretKeyRef).
+extraEnv: []
+
+podAnnotations: {}
+# More labels on the server's pods. The selector's own keys
+# (app.kubernetes.io/name, instance and component) are refused.
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""
+
+serviceAccount:
+  create: true
+  # The account's name; empty is <fullname>. With create false, an existing
+  # account's name (empty: the namespace's default).
+  name: ""
+  annotations: {}
+
+service:
+  # The agent endpoint's Service, <fullname>-agent: where collectors poll.
+  agent:
+    type: ClusterIP
+    port: 51234
+    # Only for type NodePort or LoadBalancer; null lets Kubernetes pick.
+    nodePort: null
+    # Only for type LoadBalancer: the client CIDRs allowed in.
+    loadBalancerSourceRanges: []
+    annotations: {}
+  # The management API's Service, <fullname>-management. Always ClusterIP:
+  # its shared secret opens every organization, so it stays inside the
+  # cluster (README.md, "Reaching the management API").
+  management:
+    annotations: {}
+
+networkPolicy:
+  # NetworkPolicies for both components' pods and the bundled Postgres's.
+  # They take effect only where the cluster's network plugin enforces them.
+  enabled: false
+  management:
+    # Who may reach the management port: NetworkPolicy peers (podSelector,
+    # namespaceSelector, ipBlock). Empty: nobody, not even pods in the same
+    # namespace. The agent port is open to everyone.
+    from: []
+
+# The bundled Postgres: a StatefulSet that runs the bootstrap once, when it
+# first creates its data, in its own pod.
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "18"
+    # postgres:18 (18.6). Empty: the tag alone.
+    digest: sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+    pullPolicy: IfNotPresent
+  auth:
+    # Its Secret (required while enabled), with the key postgres-password:
+    # the Postgres superuser's password, which never leaves this pod.
+    existingSecret: ""
+  # The opamp-server's database, made by the bootstrap.
+  database: telflo_opamp
+  persistence:
+    size: 8Gi
+    # Empty: the cluster's default storage class.
+    storageClassName: ""
+  resources: {}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# A Postgres you run (postgres.enabled: false). Run deploy/bootstrap.sql in
+# it once first (README.md, "External Postgres").
+externalDatabase:
+  # Required: its host name or IP address.
+  host: ""
+  port: 5432
+  database: telflo_opamp
+  # Required: the libpq sslmode the server connects with, for example
+  # verify-full.
+  sslmode: ""
+  # Keys of the server's Secret holding the whole URLs instead (both, or
+  # neither). Then owner-password and runtime-password aren't read, and
+  # host, port, database and sslmode aren't used.
+  urlKeys:
+    runtime: ""
+    migration: ""
