@@ -3,7 +3,7 @@ package management
 import (
 	"net/http"
 
-	"github.com/telflo/opamp-server/internal/apierror"
+	"github.com/telflo/telflo-opamp-server/internal/apierror"
 )
 
 // errorCode is one of the management API's error codes.

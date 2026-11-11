@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"strings"
 
-	"github.com/telflo/opamp-server/internal/envconfig"
+	"github.com/telflo/telflo-opamp-server/internal/envconfig"
 )
 
 // The management API's settings. The process's own (the database URL, the

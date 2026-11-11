@@ -16,10 +16,10 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	"github.com/telflo/opamp-server/store/database/databasetest"
-	"github.com/telflo/opamp-server/store/organizations"
-	"github.com/telflo/opamp-server/store/publications"
-	"github.com/telflo/opamp-server/store/storetest"
+	"github.com/telflo/telflo-opamp-server/store/database/databasetest"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/publications"
+	"github.com/telflo/telflo-opamp-server/store/storetest"
 )
 
 // postgresFleetServer is a Server over every Postgres store on a fresh,

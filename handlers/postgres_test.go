@@ -8,11 +8,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opamp-go/protobufs"
 
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/fleets"
-	"github.com/telflo/opamp-server/store/organizations"
-	"github.com/telflo/opamp-server/store/storetest"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/storetest"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // The poll's main flows end to end, through the authentication, on the

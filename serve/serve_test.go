@@ -17,12 +17,12 @@ import (
 
 	"github.com/awnumar/memguard"
 
-	"github.com/telflo/opamp-server/agent"
-	"github.com/telflo/opamp-server/internal/diagnostics"
-	"github.com/telflo/opamp-server/internal/shutdown"
-	"github.com/telflo/opamp-server/internal/testcert"
-	"github.com/telflo/opamp-server/management"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/agent"
+	"github.com/telflo/telflo-opamp-server/internal/diagnostics"
+	"github.com/telflo/telflo-opamp-server/internal/shutdown"
+	"github.com/telflo/telflo-opamp-server/internal/testcert"
+	"github.com/telflo/telflo-opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // serveHTTP runs the management listener alone, through serveListeners as

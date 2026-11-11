@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/apikeys"
-	"github.com/telflo/opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/apikeys"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
 )
 
 // The API key routes: the secret holder mints, reads, renames and revokes

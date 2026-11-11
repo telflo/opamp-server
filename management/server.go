@@ -42,16 +42,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/telflo/opamp-server/middleware"
-	"github.com/telflo/opamp-server/store/apikeys"
-	"github.com/telflo/opamp-server/store/collectorgroups"
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/enrollmenttokens"
-	"github.com/telflo/opamp-server/store/fleets"
-	"github.com/telflo/opamp-server/store/organizations"
-	"github.com/telflo/opamp-server/store/publications"
-	"github.com/telflo/opamp-server/store/variables"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/store/apikeys"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/enrollmenttokens"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/publications"
+	"github.com/telflo/telflo-opamp-server/store/variables"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // apiPrefix is the subtree behind the secret (or an API key).

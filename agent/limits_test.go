@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 // The agent side's limits default to 12,000 requests a minute per

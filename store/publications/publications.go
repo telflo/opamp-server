@@ -38,7 +38,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/orgvariables"
+	"github.com/telflo/telflo-opamp-server/store/orgvariables"
 )
 
 // Publication is one stored publication. List leaves YAML empty.

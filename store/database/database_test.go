@@ -20,10 +20,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
 
-	"github.com/telflo/opamp-server/migrations"
-	"github.com/telflo/opamp-server/store/database"
-	"github.com/telflo/opamp-server/store/database/databasetest"
-	"github.com/telflo/opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/migrations"
+	"github.com/telflo/telflo-opamp-server/store/database"
+	"github.com/telflo/telflo-opamp-server/store/database/databasetest"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests"). Every test

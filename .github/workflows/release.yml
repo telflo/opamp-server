@@ -63,7 +63,7 @@ jobs:
           if [ "$(git cat-file -t "refs/tags/$TAG")" != tag ]; then
             echo "::error::$TAG is a lightweight tag: a release is an annotated tag (git tag -a $TAG)"; exit 1
           fi
-          chart=charts/opamp-server/Chart.yaml
+          chart=charts/telflo-opamp-server/Chart.yaml
           chart_version=$(sed -n 's/^version:[[:space:]]*"\{0,1\}\([^"[:space:]]*\)"\{0,1\}[[:space:]]*$/\1/p' "$chart")
           app_version=$(sed -n 's/^appVersion:[[:space:]]*"\{0,1\}\([^"[:space:]]*\)"\{0,1\}[[:space:]]*$/\1/p' "$chart")
           if [ "$chart_version" != "$VERSION" ] || [ "$app_version" != "$VERSION" ]; then
@@ -90,8 +90,8 @@ jobs:
     env:
       TAG: ${{ needs.version.outputs.tag }}
       VERSION: ${{ needs.version.outputs.version }}
-      IMAGE: ghcr.io/telflo/opamp-server
-      CHART: oci://ghcr.io/telflo/charts/opamp-server
+      IMAGE: ghcr.io/telflo/telflo-opamp-server
+      CHART: oci://ghcr.io/telflo/charts/telflo-opamp-server
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -167,8 +167,8 @@ jobs:
       - name: The chart
         if: steps.published.outputs.chart != 'true'
         run: |
-          helm package charts/opamp-server --destination "$RUNNER_TEMP/chart"
-          helm push "$RUNNER_TEMP/chart/opamp-server-$VERSION.tgz" "${CHART%/opamp-server}"
+          helm package charts/telflo-opamp-server --destination "$RUNNER_TEMP/chart"
+          helm push "$RUNNER_TEMP/chart/telflo-opamp-server-$VERSION.tgz" "${CHART%/telflo-opamp-server}"
 
       # Last, so the Release page appears only once the image and the chart
       # it announces are published.

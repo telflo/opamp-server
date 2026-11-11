@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/collectorgroups"
-	"github.com/telflo/opamp-server/store/variableuse"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/variableuse"
 )
 
 // The collector group routes: a fleet's groups, the Default group first. A

@@ -13,9 +13,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/telflo/opamp-server/store/database/databasetest"
-	"github.com/telflo/opamp-server/store/organizations"
-	"github.com/telflo/opamp-server/store/publications"
+	"github.com/telflo/telflo-opamp-server/store/database/databasetest"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/publications"
 )
 
 // This package's own test database: go test ./... runs packages in

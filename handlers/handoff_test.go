@@ -11,14 +11,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opamp-go/protobufs"
 
-	"github.com/telflo/opamp-server/middleware"
-	"github.com/telflo/opamp-server/store/collectorgroups"
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/enrollmenttokens"
-	"github.com/telflo/opamp-server/store/fleets"
-	"github.com/telflo/opamp-server/store/organizations"
-	"github.com/telflo/opamp-server/store/storetest"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/enrollmenttokens"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/storetest"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // pushedClaims opens the answer's pushed bearer with the harness's keyring.

@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/telflo/opamp-server/telemetry"
+	"github.com/telflo/telflo-opamp-server/telemetry"
 )
 
 // Postgres is the Store `serve` uses, on telflo_opamp.publications, as

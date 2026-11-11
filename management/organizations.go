@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
 )
 
 // The organization routes. api/openapi.yaml documents each, and the

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/telflo/opamp-server/internal/envconfig"
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/internal/envconfig"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 // The agent listener's settings: the port collectors poll, apart from the

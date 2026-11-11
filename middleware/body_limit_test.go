@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // readBack runs body through BodyLimit(max) and returns the answer and what

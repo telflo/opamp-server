@@ -78,7 +78,7 @@ LABEL org.opencontainers.image.title="opamp-server" \
       org.opencontainers.image.description="An OpAMP server for OpenTelemetry Collector fleets, with a management API" \
       org.opencontainers.image.vendor="Telflo" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.source="https://github.com/telflo/opamp-server" \
+      org.opencontainers.image.source="https://github.com/telflo/telflo-opamp-server" \
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.revision="$REVISION"
 

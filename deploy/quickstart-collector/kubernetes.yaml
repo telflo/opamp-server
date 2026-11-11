@@ -62,7 +62,7 @@ spec:
           imagePullPolicy: Never
           env:
             - name: OPAMP_ENDPOINT
-              value: http://opamp-opamp-server-agent.opamp.svc:51234/opamp/api/v1
+              value: http://opamp-telflo-opamp-server-agent.opamp.svc:51234/opamp/api/v1
           envFrom:
             - secretRef:
                 name: quickstart-collector

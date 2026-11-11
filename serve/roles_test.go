@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/telflo/opamp-server/agent"
-	"github.com/telflo/opamp-server/internal/diagnostics"
-	"github.com/telflo/opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/agent"
+	"github.com/telflo/telflo-opamp-server/internal/diagnostics"
+	"github.com/telflo/telflo-opamp-server/management"
 )
 
 // serve's argument names the role: none for both components, agent or

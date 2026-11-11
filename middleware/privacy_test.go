@@ -14,8 +14,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/telflo/opamp-server/store/fleets"
-	. "github.com/telflo/opamp-server/store/storetest"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	. "github.com/telflo/telflo-opamp-server/store/storetest"
 )
 
 // No bearer, key, key setting or Authorization header reaches a log line or

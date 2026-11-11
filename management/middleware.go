@@ -18,8 +18,8 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/telflo/opamp-server/store/apikeys"
-	"github.com/telflo/opamp-server/telemetry"
+	"github.com/telflo/telflo-opamp-server/store/apikeys"
+	"github.com/telflo/telflo-opamp-server/telemetry"
 )
 
 // MaxBodyBytes caps every request body: 2 MiB.

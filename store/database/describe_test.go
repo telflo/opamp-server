@@ -16,9 +16,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pressly/goose/v3"
 
-	"github.com/telflo/opamp-server/internal/testcert"
-	"github.com/telflo/opamp-server/store/database"
-	"github.com/telflo/opamp-server/store/database/databasetest"
+	"github.com/telflo/telflo-opamp-server/internal/testcert"
+	"github.com/telflo/telflo-opamp-server/store/database"
+	"github.com/telflo/telflo-opamp-server/store/database/databasetest"
 )
 
 // canary is a distinctive random string to search an error's text for.

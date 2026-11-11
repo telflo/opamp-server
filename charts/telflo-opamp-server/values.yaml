@@ -1,4 +1,4 @@
-# The opamp-server chart's values. README.md describes each one.
+# The telflo-opamp-server chart's values. README.md describes each one.
 #
 # Nothing secret goes here, ever: every credential is read from a Secret you
 # create before installing (README.md, "Install"), named by `existingSecret`.
@@ -6,7 +6,7 @@
 
 # Names. The resources are named <fullname>, <fullname>-agent,
 # <fullname>-management, <fullname>-postgres and so on. fullname is the
-# release's name, followed by "-opamp-server" unless the release's name
+# release's name, followed by "-telflo-opamp-server" unless the release's name
 # already holds it, cut to 43 characters.
 nameOverride: ""
 fullnameOverride: ""
@@ -14,7 +14,7 @@ fullnameOverride: ""
 # The server's image. The reference is <repository>:<tag>@<digest>, without
 # "@<digest>" when digest is empty. An empty tag is the chart's appVersion.
 image:
-  repository: ghcr.io/telflo/opamp-server
+  repository: ghcr.io/telflo/telflo-opamp-server
   tag: ""
   digest: ""
   pullPolicy: IfNotPresent

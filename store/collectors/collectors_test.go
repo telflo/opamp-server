@@ -16,14 +16,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/telflo/opamp-server/store/collectorgroups"
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/fleets"
-	"github.com/telflo/opamp-server/store/organizations"
-	"github.com/telflo/opamp-server/store/orgvariables"
-	"github.com/telflo/opamp-server/store/publications"
-	. "github.com/telflo/opamp-server/store/storetest"
-	"github.com/telflo/opamp-server/store/variables"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/orgvariables"
+	"github.com/telflo/telflo-opamp-server/store/publications"
+	. "github.com/telflo/telflo-opamp-server/store/storetest"
+	"github.com/telflo/telflo-opamp-server/store/variables"
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests").

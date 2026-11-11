@@ -18,16 +18,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/telflo/opamp-server/store/apikeys"
-	"github.com/telflo/opamp-server/store/collectorgroups"
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/database/databasetest"
-	"github.com/telflo/opamp-server/store/enrollmenttokens"
-	"github.com/telflo/opamp-server/store/fleets"
-	"github.com/telflo/opamp-server/store/organizations"
-	"github.com/telflo/opamp-server/store/publications"
-	"github.com/telflo/opamp-server/store/variables"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/store/apikeys"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/database/databasetest"
+	"github.com/telflo/telflo-opamp-server/store/enrollmenttokens"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/publications"
+	"github.com/telflo/telflo-opamp-server/store/variables"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // The ids the publication tests use. Organization B is the one that must

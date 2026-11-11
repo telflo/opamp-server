@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/variables"
+	"github.com/telflo/telflo-opamp-server/store/variables"
 )
 
 // The organization variables' routes: an organization's variables, its

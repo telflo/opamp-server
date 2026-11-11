@@ -6,10 +6,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/collectorgroups"
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/enrollmenttokens"
-	"github.com/telflo/opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/enrollmenttokens"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
 )
 
 // The request bodies and replies of the fleet, group and token routes. Each

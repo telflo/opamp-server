@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/telflo/opamp-server/internal/lru"
+	"github.com/telflo/telflo-opamp-server/internal/lru"
 )
 
 type clock struct {

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/telflo/opamp-server/store/enrollmenttokens"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/store/enrollmenttokens"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // The enrollment token routes. A bearer is never stored: rotate and reveal

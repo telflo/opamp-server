@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/telflo/opamp-server/telemetry"
+	"github.com/telflo/telflo-opamp-server/telemetry"
 )
 
 // DatabaseDeadline bounds an agent request's database work: the token

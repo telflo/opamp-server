@@ -18,16 +18,16 @@ import (
 	"github.com/open-telemetry/opamp-go/protobufs"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/telflo/opamp-server/middleware"
-	"github.com/telflo/opamp-server/store/collectorgroups"
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/enrollmenttokens"
-	"github.com/telflo/opamp-server/store/fleets"
-	"github.com/telflo/opamp-server/store/orgvariables"
-	"github.com/telflo/opamp-server/store/publications"
-	"github.com/telflo/opamp-server/store/storetest"
-	"github.com/telflo/opamp-server/store/variables"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/enrollmenttokens"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/orgvariables"
+	"github.com/telflo/telflo-opamp-server/store/publications"
+	"github.com/telflo/telflo-opamp-server/store/storetest"
+	"github.com/telflo/telflo-opamp-server/store/variables"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // testDatabase is the Postgres tests' database (storetest.Each).

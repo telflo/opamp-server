@@ -13,11 +13,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/fleets"
-	"github.com/telflo/opamp-server/store/organizations"
-	"github.com/telflo/opamp-server/store/orgvariables"
-	"github.com/telflo/opamp-server/store/publications"
-	"github.com/telflo/opamp-server/store/variables"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/orgvariables"
+	"github.com/telflo/telflo-opamp-server/store/publications"
+	"github.com/telflo/telflo-opamp-server/store/variables"
 )
 
 // The variables routes' fixture ids: A's are organization A's.

@@ -73,7 +73,7 @@ That works once every module the gates need has been downloaded once.
   ship: a module only tests import (kin-openapi, for the conformance test)
   isn't checked.
 - **The module itself must be Apache-2.0.** The check fails unless the
-  report lists `github.com/telflo/opamp-server` under the Apache License
+  report lists `github.com/telflo/telflo-opamp-server` under the Apache License
   2.0, which `LICENSE` is, so a root `LICENSE` swapped for another allowed
   licence still fails. `NOTICE` goes with it.
 - `scripts/check-licenses.test.sh` shows the check refusing a GPL-3.0
@@ -445,17 +445,17 @@ path.
 ## Releasing
 
 A release is one commit and one version: the image
-`ghcr.io/telflo/opamp-server:<version>`, the chart
-`oci://ghcr.io/telflo/charts/opamp-server` at `<version>`, and the
+`ghcr.io/telflo/telflo-opamp-server:<version>`, the chart
+`oci://ghcr.io/telflo/charts/telflo-opamp-server` at `<version>`, and the
 binaries on the GitHub Release `v<version>`, all built from that commit.
 The image's tag, the chart's `version` and its `appVersion` are the same
 number, and a published version is never pushed again: a fix is a new
 version. Below, `0.2.0` stands for the new version.
 
 **1. The version, through a pull request.** On a branch, set `version`
-and `appVersion` in `charts/opamp-server/Chart.yaml` to the new version,
+and `appVersion` in `charts/telflo-opamp-server/Chart.yaml` to the new version,
 the two equal, and the `helm install … --version` in `docs/kubernetes.md` and
-`charts/opamp-server/README.md` (the chart's render tests read the version
+`charts/telflo-opamp-server/README.md` (the chart's render tests read the version
 from Chart.yaml). If the release adds a migration, `docs/upgrading.md`
 names the schema it brings a database to. In `CHANGELOG.md`, add the
 version's entry, with its date. Run `make
@@ -463,7 +463,7 @@ check` and `make smoke` (the chart and the image from your tree, on a
 throwaway minikube profile), then commit:
 
 ```sh
-git commit -m "Release 0.2.0" -- charts/opamp-server/Chart.yaml docs/kubernetes.md charts/opamp-server/README.md CHANGELOG.md
+git commit -m "Release 0.2.0" -- charts/telflo-opamp-server/Chart.yaml docs/kubernetes.md charts/telflo-opamp-server/README.md CHANGELOG.md
 ```
 
 The release commit lands on `main` through a pull request, reviewed like

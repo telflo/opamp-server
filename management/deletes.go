@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/telflo/opamp-server/internal/shutdown"
+	"github.com/telflo/telflo-opamp-server/internal/shutdown"
 )
 
 // DeleteTimeout bounds an organization's, a fleet's or a group's delete

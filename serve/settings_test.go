@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/agent"
-	"github.com/telflo/opamp-server/management"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/agent"
+	"github.com/telflo/telflo-opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // keyed is envOf with an encryption key and the server's URL set, as serve

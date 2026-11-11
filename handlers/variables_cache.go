@@ -3,8 +3,8 @@ package handlers
 import (
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/internal/lru"
-	"github.com/telflo/opamp-server/store/orgvariables"
+	"github.com/telflo/telflo-opamp-server/internal/lru"
+	"github.com/telflo/telflo-opamp-server/store/orgvariables"
 )
 
 // The variables cache's bounds: 64 MiB of resolved variables in all, and no

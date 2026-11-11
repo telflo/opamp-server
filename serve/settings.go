@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/telflo/opamp-server/agent"
-	"github.com/telflo/opamp-server/internal/envconfig"
-	"github.com/telflo/opamp-server/management"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/agent"
+	"github.com/telflo/telflo-opamp-server/internal/envconfig"
+	"github.com/telflo/telflo-opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // The process's own settings. Each component reads its own

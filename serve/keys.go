@@ -11,8 +11,8 @@ import (
 
 	"github.com/awnumar/memguard"
 
-	"github.com/telflo/opamp-server/internal/envconfig"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/internal/envconfig"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // The enrollment tokens' encryption keys, which both components hold: the

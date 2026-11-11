@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/internal/lru"
-	"github.com/telflo/opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/internal/lru"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
 )
 
 // The agent side's limits, each counted per pod: an organization's

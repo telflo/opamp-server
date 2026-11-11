@@ -22,12 +22,12 @@ import (
 
 	"github.com/awnumar/memguard"
 
-	"github.com/telflo/opamp-server/agent"
-	"github.com/telflo/opamp-server/management"
-	"github.com/telflo/opamp-server/middleware"
-	"github.com/telflo/opamp-server/store/database"
-	"github.com/telflo/opamp-server/telemetry"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/agent"
+	"github.com/telflo/telflo-opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/store/database"
+	"github.com/telflo/telflo-opamp-server/telemetry"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // Serve is `opamp-server serve [agent|management]`: it reads its settings

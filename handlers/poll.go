@@ -9,10 +9,10 @@ import (
 
 	"github.com/open-telemetry/opamp-go/protobufs"
 
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/enrollmenttokens"
-	"github.com/telflo/opamp-server/store/orgvariables"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/enrollmenttokens"
+	"github.com/telflo/telflo-opamp-server/store/orgvariables"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // The two polls: a default token's hand-off, and a rotate token's

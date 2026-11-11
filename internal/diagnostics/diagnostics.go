@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/telflo/opamp-server/internal/apierror"
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/internal/apierror"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 const (

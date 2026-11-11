@@ -1,5 +1,5 @@
 apiVersion: v2
-name: opamp-server
+name: telflo-opamp-server
 description: An OpAMP server for OpenTelemetry Collector fleets, with a management API, and optionally a Postgres of its own.
 type: application
 # The chart's version, the image's tag and appVersion are always the same
@@ -7,9 +7,9 @@ type: application
 version: 0.2.4
 appVersion: "0.2.4"
 kubeVersion: ">=1.25.0-0"
-home: https://github.com/telflo/opamp-server
+home: https://github.com/telflo/telflo-opamp-server
 sources:
-  - https://github.com/telflo/opamp-server
+  - https://github.com/telflo/telflo-opamp-server
 keywords:
   - opamp
   - opentelemetry

@@ -10,8 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/telflo/opamp-server/internal/shutdown"
-	"github.com/telflo/opamp-server/store/database/databasetest"
+	"github.com/telflo/telflo-opamp-server/internal/shutdown"
+	"github.com/telflo/telflo-opamp-server/store/database/databasetest"
 )
 
 // groupUnderDelete is the group the group's case of deletesUnderLock

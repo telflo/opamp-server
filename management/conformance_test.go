@@ -19,9 +19,9 @@ import (
 	"github.com/getkin/kin-openapi/routers/gorillamux"
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/internal/diagnostics"
-	"github.com/telflo/opamp-server/store/organizations"
-	"github.com/telflo/opamp-server/store/publications"
+	"github.com/telflo/telflo-opamp-server/internal/diagnostics"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/publications"
 )
 
 // The contract test: api/openapi.yaml is what the platform's client and

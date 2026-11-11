@@ -5,7 +5,7 @@
 # passed through the chart's annotation maps, never in the chart.
 #
 # Usage: scripts/check-chart-cloud-neutral.sh [CHART_DIR [PROFILES_DIR]]
-#   CHART_DIR     default: charts/opamp-server
+#   CHART_DIR     default: charts/telflo-opamp-server
 #   PROFILES_DIR  default: CHART_DIR/tests/profiles (complete values files)
 #
 # It fails (exit 1) when:
@@ -27,7 +27,7 @@
 set -u
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-CHART_DIR="${1:-$REPO_DIR/charts/opamp-server}"
+CHART_DIR="${1:-$REPO_DIR/charts/telflo-opamp-server}"
 PROFILES_DIR="${2:-$CHART_DIR/tests/profiles}"
 
 # The markers (the design's list): matched anywhere, ignoring case.

@@ -3,7 +3,7 @@ package handlers
 import (
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/internal/lru"
+	"github.com/telflo/telflo-opamp-server/internal/lru"
 )
 
 // The YAML cache's bounds: 64 MiB of YAML in all, and no entry over 4 MiB

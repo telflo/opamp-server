@@ -20,7 +20,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
 )
 
 // The limits. Lengths are counted in characters (code points), as Postgres's

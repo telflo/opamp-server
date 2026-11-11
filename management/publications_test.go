@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/publications"
+	"github.com/telflo/telflo-opamp-server/store/publications"
 )
 
 // trickyYAML must come back byte for byte: HTML characters (which Go's JSON

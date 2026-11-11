@@ -13,7 +13,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	"github.com/telflo/opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
 )
 
 // On Postgres too: another organization's ids are 404 on every collector

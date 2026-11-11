@@ -11,10 +11,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/internal/diagnostics"
-	"github.com/telflo/opamp-server/store/apikeys"
-	"github.com/telflo/opamp-server/store/organizations"
-	"github.com/telflo/opamp-server/store/publications"
+	"github.com/telflo/telflo-opamp-server/internal/diagnostics"
+	"github.com/telflo/telflo-opamp-server/store/apikeys"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/publications"
 )
 
 func apiKeyTarget(id string) string       { return apiKeysPath + "/" + id }

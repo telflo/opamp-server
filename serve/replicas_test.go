@@ -19,11 +19,11 @@ import (
 	"github.com/open-telemetry/opamp-go/protobufs"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/telflo/opamp-server/agent"
-	"github.com/telflo/opamp-server/management"
-	"github.com/telflo/opamp-server/middleware"
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/database/databasetest"
+	"github.com/telflo/telflo-opamp-server/agent"
+	"github.com/telflo/telflo-opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/database/databasetest"
 )
 
 // Told to stop, serve answers /ready 503 at once and keeps both listeners

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/telflo/opamp-server/store/apikeys"
+	"github.com/telflo/telflo-opamp-server/store/apikeys"
 )
 
 // A generated key parses back to its id and its secret's hash, and only

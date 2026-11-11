@@ -1,4 +1,4 @@
-{{- include "opamp-server.guards" . }}
+{{- include "telflo-opamp-server.guards" . }}
 {{- /*
 bootstrap.sql (the database and its roles) and initdb.sh (which runs it once,
 when a postgres image first creates its data). Always rendered: the bundled
@@ -8,9 +8,9 @@ another Postgres").
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "opamp-server.bootstrapName" . | quote }}
+  name: {{ include "telflo-opamp-server.bootstrapName" . | quote }}
   labels:
-    {{- include "opamp-server.labels" (dict "ctx" . "component" "bootstrap") | nindent 4 }}
+    {{- include "telflo-opamp-server.labels" (dict "ctx" . "component" "bootstrap") | nindent 4 }}
 data:
   bootstrap.sql: |
     {{- .Files.Get "files/bootstrap.sql" | nindent 4 }}

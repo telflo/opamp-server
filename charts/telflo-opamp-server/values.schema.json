@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "opamp-server chart values",
+  "title": "telflo-opamp-server chart values",
   "type": "object",
   "additionalProperties": false,
   "definitions": {

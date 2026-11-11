@@ -18,7 +18,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/telflo/opamp-server/store/database"
+	"github.com/telflo/telflo-opamp-server/store/database"
 )
 
 // A flood of /ready on the public agent port leaves the pod ready. On a

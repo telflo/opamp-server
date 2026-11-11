@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/telflo/opamp-server/internal/diagnostics"
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/internal/diagnostics"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 // debugGet sends a GET of target through the server, with authorization

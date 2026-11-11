@@ -1,4 +1,4 @@
-{{- include "opamp-server.guards" . }}
+{{- include "telflo-opamp-server.guards" . }}
 {{- $agent := .Values.service.agent }}
 {{- /*
 Two Services, one per component's Deployment, for their two audiences. The
@@ -11,9 +11,9 @@ port-forward` (README.md).
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ printf "%s-agent" (include "opamp-server.fullname" .) | quote }}
+  name: {{ printf "%s-agent" (include "telflo-opamp-server.fullname" .) | quote }}
   labels:
-    {{- include "opamp-server.labels" (dict "ctx" . "component" "agent") | nindent 4 }}
+    {{- include "telflo-opamp-server.labels" (dict "ctx" . "component" "agent") | nindent 4 }}
   {{- with $agent.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -25,7 +25,7 @@ spec:
     {{- toYaml . | nindent 4 }}
   {{- end }}
   selector:
-    {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "agent") | nindent 4 }}
+    {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" . "component" "agent") | nindent 4 }}
   ports:
     - name: agent
       port: {{ int $agent.port }}
@@ -38,9 +38,9 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ printf "%s-management" (include "opamp-server.fullname" .) | quote }}
+  name: {{ printf "%s-management" (include "telflo-opamp-server.fullname" .) | quote }}
   labels:
-    {{- include "opamp-server.labels" (dict "ctx" . "component" "management") | nindent 4 }}
+    {{- include "telflo-opamp-server.labels" (dict "ctx" . "component" "management") | nindent 4 }}
   {{- with .Values.service.management.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -48,7 +48,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "management") | nindent 4 }}
+    {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" . "component" "management") | nindent 4 }}
   ports:
     - name: management
       port: 51235

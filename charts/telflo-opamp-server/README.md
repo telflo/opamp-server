@@ -1,4 +1,4 @@
-# The opamp-server chart
+# The telflo-opamp-server chart
 
 Installs the opamp-server on Kubernetes: the agent endpoint, which
 OpenTelemetry Collectors (through the OpAMP supervisor) poll for their
@@ -6,8 +6,8 @@ configuration, and the management API, behind a shared secret. By default
 it also runs its own Postgres, so one `helm install` gives a working
 server; or it uses a Postgres you run.
 
-The repository's [README](https://github.com/telflo/opamp-server#readme)
-and [docs](https://github.com/telflo/opamp-server/tree/main/docs) describe
+The repository's [README](https://github.com/telflo/telflo-opamp-server#readme)
+and [docs](https://github.com/telflo/telflo-opamp-server/tree/main/docs) describe
 the server itself. This page covers what the chart adds.
 
 ## What it installs
@@ -69,14 +69,14 @@ kubectl -n opamp create secret generic opamp-server-postgres \
 
 **Back up `encryption-key` outside the cluster.** Without it, the
 enrollment tokens the server stores can't be read again (the server's
-[security.md](https://github.com/telflo/opamp-server/blob/main/docs/security.md), "The encryption key"). Give `management-secret` to your management
+[security.md](https://github.com/telflo/telflo-opamp-server/blob/main/docs/security.md), "The encryption key"). Give `management-secret` to your management
 client (your platform, your tooling). Then delete the folder, or keep it
 somewhere safe.
 
 **2. The chart:**
 
 ```sh
-helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.2.4 -n opamp \
+helm install opamp oci://ghcr.io/telflo/charts/telflo-opamp-server --version 0.2.4 -n opamp \
   --set auth.existingSecret=opamp-server \
   --set postgres.auth.existingSecret=opamp-server-postgres \
   --set server.publicUrl=https://opamp.example.com/opamp/api/v1
@@ -93,7 +93,7 @@ For an image in a registry that needs credentials, create a
 **While the packages are private**, both need credentials: run
 `helm registry login ghcr.io` (with `--password-stdin`) before
 `helm install`, and give the cluster a pull secret for
-`ghcr.io/telflo/opamp-server` in `imagePullSecrets`. Once they are
+`ghcr.io/telflo/telflo-opamp-server` in `imagePullSecrets`. Once they are
 public, you need neither.
 
 ## The Secrets it reads
@@ -131,8 +131,8 @@ A missing required key stops the pod (`CreateContainerConfigError`).
 | Value | Default | What it is |
 |---|---|---|
 | `nameOverride` | `""` | Replaces the chart's name in resource names and the `app.kubernetes.io/name` label. |
-| `fullnameOverride` | `""` | The resources' base name (`<fullname>`), at most 43 characters. Default: the release's name, followed by `-opamp-server` unless it already holds it. |
-| `image.repository` | `ghcr.io/telflo/opamp-server` | The server's image. |
+| `fullnameOverride` | `""` | The resources' base name (`<fullname>`), at most 43 characters. Default: the release's name, followed by `-telflo-opamp-server` unless it already holds it. |
+| `image.repository` | `ghcr.io/telflo/telflo-opamp-server` | The server's image. |
 | `image.tag` | `""` | Its tag; empty is the chart's `appVersion`. |
 | `image.digest` | `""` | `sha256:…`, pinning the image as `<repository>:<tag>@<digest>`. |
 | `image.pullPolicy` | `IfNotPresent` | `Always`, `IfNotPresent` or `Never`. |
@@ -197,13 +197,13 @@ root, which a parent chart sets.
 
 With `postgres.enabled: false` the server uses a Postgres you run, 16 or
 later. Run `deploy/bootstrap.sql` in it once first, as a superuser (the
-server's [database.md](https://github.com/telflo/opamp-server/blob/main/docs/database.md), "Bootstrap the database and roles",
+server's [database.md](https://github.com/telflo/telflo-opamp-server/blob/main/docs/database.md), "Bootstrap the database and roles",
 which also covers a managed Postgres without a superuser). `serve` checks
 the result at every start and refuses a role or a database set up more
 loosely.
 
 ```sh
-helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.2.4 -n opamp \
+helm install opamp oci://ghcr.io/telflo/charts/telflo-opamp-server --version 0.2.4 -n opamp \
   --set auth.existingSecret=opamp-server \
   --set postgres.enabled=false \
   --set externalDatabase.host=db.internal \
@@ -241,7 +241,7 @@ that client in `networkPolicy.management.from`.
 From your machine, for a look:
 
 ```sh
-kubectl -n opamp port-forward svc/opamp-opamp-server-management 51235:51235
+kubectl -n opamp port-forward svc/opamp-telflo-opamp-server-management 51235:51235
 curl -sS http://127.0.0.1:51235/health
 ```
 
@@ -270,10 +270,10 @@ A pod reads its Secrets only when it starts, and the chart never sees
 their values, so restart the pods after you change one:
 
 ```sh
-kubectl -n opamp rollout restart deployment/opamp-opamp-server-agent deployment/opamp-opamp-server-management
+kubectl -n opamp rollout restart deployment/opamp-telflo-opamp-server-agent deployment/opamp-telflo-opamp-server-management
 ```
 
-The server's [security.md](https://github.com/telflo/opamp-server/blob/main/docs/security.md) describes each rotation. With the chart:
+The server's [security.md](https://github.com/telflo/telflo-opamp-server/blob/main/docs/security.md) describes each rotation. With the chart:
 
 - **The management secret:** put the old secret in
   `management-secrets-previous` (comma-separated, for several) and the new
@@ -291,7 +291,7 @@ The server's [security.md](https://github.com/telflo/opamp-server/blob/main/docs
      the old one in `encryption-keys-previous`, then `kubectl rollout
      restart`. New bearers use the new key, and every pod opens both.
   3. Give collectors bearers under the new key (the server's
-     [security.md](https://github.com/telflo/opamp-server/blob/main/docs/security.md), "Rotating it"). When no collector presents an old
+     [security.md](https://github.com/telflo/telflo-opamp-server/blob/main/docs/security.md), "Rotating it"). When no collector presents an old
      bearer, set the value back to `false` with another `helm upgrade`,
      then remove `encryption-keys-previous` from the Secret.
 
@@ -307,7 +307,7 @@ upgrade**: `migrate up` runs as soon as the new pods start, and rolling a
 release back means restoring that backup.
 
 ```sh
-helm upgrade opamp oci://ghcr.io/telflo/charts/opamp-server --version <version> -n opamp -f my-values.yaml
+helm upgrade opamp oci://ghcr.io/telflo/charts/telflo-opamp-server --version <version> -n opamp -f my-values.yaml
 ```
 
 Here `my-values.yaml` holds the values you installed with.
@@ -318,13 +318,13 @@ run that changes nothing is harmless. Wait a minute or so for the
 ConfigMap's new file to reach the Postgres pod, then:
 
 ```sh
-kubectl -n opamp exec opamp-opamp-server-postgres-0 -c postgres -- /docker-entrypoint-initdb.d/initdb.sh
+kubectl -n opamp exec opamp-telflo-opamp-server-postgres-0 -c postgres -- /docker-entrypoint-initdb.d/initdb.sh
 ```
 
 It uses the passwords in the pod's own environment, so nothing secret
 crosses your terminal. It also sets both database passwords again from the
 Secret, which is how you change one: update the Secret, restart the
-Postgres pod (`kubectl -n opamp delete pod opamp-opamp-server-postgres-0`),
+Postgres pod (`kubectl -n opamp delete pod opamp-telflo-opamp-server-postgres-0`),
 run the command, then restart the server's pods. With an external
 Postgres, run the new `deploy/bootstrap.sql` there yourself.
 
@@ -342,7 +342,7 @@ bootstrap failing), start again from an empty volume:
 
 ```sh
 helm uninstall opamp -n opamp
-kubectl -n opamp delete pvc data-opamp-opamp-server-postgres-0
+kubectl -n opamp delete pvc data-opamp-telflo-opamp-server-postgres-0
 helm install …
 ```
 

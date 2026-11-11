@@ -9,7 +9,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 FAILURES=0
 
-OWN_MODULE="github.com/telflo/opamp-server"
+OWN_MODULE="github.com/telflo/telflo-opamp-server"
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/check-licenses-test.XXXXXX")
 trap 'rm -rf "$scratch"' EXIT

@@ -11,10 +11,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/collectorgroups"
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/fleets"
-	. "github.com/telflo/opamp-server/store/storetest"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	. "github.com/telflo/telflo-opamp-server/store/storetest"
 )
 
 // listAll pages through List with o, checking each cursor round-trips,

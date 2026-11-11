@@ -34,7 +34,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
 )
 
 // Kind is a token's kind.

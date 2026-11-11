@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/net/netutil"
 
-	"github.com/telflo/opamp-server/internal/shutdown"
+	"github.com/telflo/telflo-opamp-server/internal/shutdown"
 )
 
 // The listeners' lifecycle: open every listener or none, serve each

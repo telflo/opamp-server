@@ -17,7 +17,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	"github.com/telflo/opamp-server/store/enrollmenttokens"
+	"github.com/telflo/telflo-opamp-server/store/enrollmenttokens"
 )
 
 // deadlineLookup records whether its context carried a deadline, and how

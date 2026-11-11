@@ -53,8 +53,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/fleets"
-	"github.com/telflo/opamp-server/store/variableuse"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/variableuse"
 )
 
 // The bounds the table checks.

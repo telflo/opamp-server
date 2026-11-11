@@ -3,11 +3,11 @@ package management
 import (
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/collectorgroups"
-	"github.com/telflo/opamp-server/store/fleets"
-	"github.com/telflo/opamp-server/store/orgvariables"
-	"github.com/telflo/opamp-server/store/variables"
-	"github.com/telflo/opamp-server/store/variableuse"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/store/orgvariables"
+	"github.com/telflo/telflo-opamp-server/store/variables"
+	"github.com/telflo/telflo-opamp-server/store/variableuse"
 )
 
 // The request bodies, replies and details of the organization variables'

@@ -19,18 +19,18 @@
 # can't classify ("Unknown") fails too, since an unknown licence can't be
 # shown to be redistributable. Only the policy's "allowed" list is read.
 #
-# The module itself: when the checked module is github.com/telflo/opamp-server
+# The module itself: when the checked module is github.com/telflo/telflo-opamp-server
 # (`go list -m`), every line the report holds for it must say Apache-2.0, and
 # there must be at least one. Without this, a root LICENSE swapped for another
 # allowed licence (MIT, say) would pass. Checking this repository (no
-# module-dir argument), the module must be github.com/telflo/opamp-server.
+# module-dir argument), the module must be github.com/telflo/telflo-opamp-server.
 #
 # Exits 0 when every licence is allowed and the module is Apache-2.0, 1 when
 # either isn't, 2 when the check itself can't run.
 set -euo pipefail
 
 GO_LICENSES="github.com/google/go-licenses/v2@v2.0.1"
-OWN_MODULE="github.com/telflo/opamp-server"
+OWN_MODULE="github.com/telflo/telflo-opamp-server"
 OWN_LICENCE="Apache-2.0"
 # go.mod's toolchain line is the one every developer uses; never let go run
 # download a newer one.

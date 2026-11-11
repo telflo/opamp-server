@@ -13,7 +13,7 @@ import (
 	"github.com/open-telemetry/opamp-go/protobufs"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 // GroupAttribute is the agent description's attribute naming the

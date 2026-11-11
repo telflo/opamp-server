@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 // A profile's or a trace's `seconds`, when given, must be a whole number

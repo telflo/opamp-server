@@ -1,4 +1,4 @@
-{{- $fullname := include "opamp-server.fullname" . -}}
+{{- $fullname := include "telflo-opamp-server.fullname" . -}}
 {{ .Chart.Name }} {{ .Chart.Version }} is installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
 
 Two Deployments run the same image on the same database, each on its own:

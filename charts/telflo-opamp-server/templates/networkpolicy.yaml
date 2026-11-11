@@ -1,4 +1,4 @@
-{{- include "opamp-server.guards" . }}
+{{- include "telflo-opamp-server.guards" . }}
 {{- if .Values.networkPolicy.enabled }}
 {{- /*
 The agent endpoint's pods: its port from anywhere.
@@ -6,13 +6,13 @@ The agent endpoint's pods: its port from anywhere.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ printf "%s-agent" (include "opamp-server.fullname" .) | quote }}
+  name: {{ printf "%s-agent" (include "telflo-opamp-server.fullname" .) | quote }}
   labels:
-    {{- include "opamp-server.labels" (dict "ctx" . "component" "agent") | nindent 4 }}
+    {{- include "telflo-opamp-server.labels" (dict "ctx" . "component" "agent") | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "agent") | nindent 6 }}
+      {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" . "component" "agent") | nindent 6 }}
   policyTypes: ["Ingress"]
   ingress:
     - ports:
@@ -27,13 +27,13 @@ with an empty `from` would admit every source).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ printf "%s-management" (include "opamp-server.fullname" .) | quote }}
+  name: {{ printf "%s-management" (include "telflo-opamp-server.fullname" .) | quote }}
   labels:
-    {{- include "opamp-server.labels" (dict "ctx" . "component" "management") | nindent 4 }}
+    {{- include "telflo-opamp-server.labels" (dict "ctx" . "component" "management") | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "management") | nindent 6 }}
+      {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" . "component" "management") | nindent 6 }}
   policyTypes: ["Ingress"]
   {{- with .Values.networkPolicy.management.from }}
   ingress:
@@ -49,22 +49,22 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "opamp-server.postgresName" . | quote }}
+  name: {{ include "telflo-opamp-server.postgresName" . | quote }}
   labels:
-    {{- include "opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+    {{- include "telflo-opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 6 }}
+      {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 6 }}
   policyTypes: ["Ingress"]
   ingress:
     - from:
         - podSelector:
             matchLabels:
-              {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "agent") | nindent 14 }}
+              {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" . "component" "agent") | nindent 14 }}
         - podSelector:
             matchLabels:
-              {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "management") | nindent 14 }}
+              {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" . "component" "management") | nindent 14 }}
       ports:
         - port: 5432
           protocol: TCP

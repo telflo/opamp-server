@@ -1,8 +1,8 @@
-{{- include "opamp-server.guards" . }}
+{{- include "telflo-opamp-server.guards" . }}
 {{- if .Values.postgres.enabled }}
 {{- $pg := .Values.postgres }}
-{{- $name := include "opamp-server.postgresName" . }}
-{{- $secret := include "opamp-server.secretName" . }}
+{{- $name := include "telflo-opamp-server.postgresName" . }}
+{{- $secret := include "telflo-opamp-server.secretName" . }}
 {{- /*
 The bundled Postgres. Its container is the only place the superuser's
 password exists. It also holds the owner's and the runtime role's passwords,
@@ -14,13 +14,13 @@ kind: Service
 metadata:
   name: {{ $name | quote }}
   labels:
-    {{- include "opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+    {{- include "telflo-opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 4 }}
 spec:
   # Headless: a DNS name resolving straight to the pod, which the StatefulSet
   # also names its pod by.
   clusterIP: None
   selector:
-    {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+    {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 4 }}
   ports:
     - name: postgres
       port: 5432
@@ -32,17 +32,17 @@ kind: StatefulSet
 metadata:
   name: {{ $name | quote }}
   labels:
-    {{- include "opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 4 }}
+    {{- include "telflo-opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 4 }}
 spec:
   serviceName: {{ $name | quote }}
   replicas: 1
   selector:
     matchLabels:
-      {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 6 }}
+      {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 8 }}
+        {{- include "telflo-opamp-server.labels" (dict "ctx" . "component" "postgres") | nindent 8 }}
       {{- with $pg.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
@@ -63,7 +63,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: postgres
-          image: {{ include "opamp-server.imageRef" (list $pg.image "18") | quote }}
+          image: {{ include "telflo-opamp-server.imageRef" (list $pg.image "18") | quote }}
           imagePullPolicy: {{ $pg.image.pullPolicy | quote }}
           # The first-start guard. A bootstrap that fails on the first start
           # is never run again (the data directory exists by then), leaving a
@@ -104,7 +104,7 @@ spec:
                   name: {{ $secret | quote }}
                   key: runtime-password
             - name: OPAMP_DATABASE_NAME
-              value: {{ include "opamp-server.envLiteral" $pg.database }}
+              value: {{ include "telflo-opamp-server.envLiteral" $pg.database }}
           # Ready once Postgres answers on TCP: while the entrypoint creates
           # the data directory its temporary server listens on a Unix socket
           # only.
@@ -140,7 +140,7 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           securityContext:
-            {{- include "opamp-server.containerSecurityContext" 999 | nindent 12 }}
+            {{- include "telflo-opamp-server.containerSecurityContext" 999 | nindent 12 }}
       volumes:
         - name: run
           emptyDir: {}
@@ -148,14 +148,14 @@ spec:
           emptyDir: {}
         - name: bootstrap-initdb
           configMap:
-            name: {{ include "opamp-server.bootstrapName" . | quote }}
+            name: {{ include "telflo-opamp-server.bootstrapName" . | quote }}
             items:
               - key: initdb.sh
                 path: initdb.sh
                 mode: 0555
         - name: bootstrap-sql
           configMap:
-            name: {{ include "opamp-server.bootstrapName" . | quote }}
+            name: {{ include "telflo-opamp-server.bootstrapName" . | quote }}
             items:
               - key: bootstrap.sql
                 path: bootstrap.sql
@@ -176,7 +176,7 @@ spec:
     - metadata:
         name: data
         labels:
-          {{- include "opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 10 }}
+          {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" . "component" "postgres") | nindent 10 }}
       spec:
         accessModes: ["ReadWriteOnce"]
         {{- with $pg.persistence.storageClassName }}

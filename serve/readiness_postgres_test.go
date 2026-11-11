@@ -11,8 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/agent"
-	"github.com/telflo/opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/agent"
+	"github.com/telflo/telflo-opamp-server/management"
 )
 
 // /ready pings on a pool of its own, one connection, never the request

@@ -8,7 +8,7 @@ import (
 
 	"github.com/pressly/goose/v3"
 
-	"github.com/telflo/opamp-server/store/database"
+	"github.com/telflo/telflo-opamp-server/store/database"
 )
 
 // yesDropData is the flag `migrate down` needs.

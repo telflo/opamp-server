@@ -12,7 +12,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	"github.com/telflo/opamp-server/internal/diagnostics"
+	"github.com/telflo/telflo-opamp-server/internal/diagnostics"
 )
 
 // The flow's markers: what must never be written down.

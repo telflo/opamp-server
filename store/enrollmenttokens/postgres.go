@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/telflo/opamp-server/store/fleets"
-	"github.com/telflo/opamp-server/telemetry"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	"github.com/telflo/telflo-opamp-server/telemetry"
 )
 
 // Postgres is the Store `serve` uses, on telflo_opamp.enrollment_tokens and

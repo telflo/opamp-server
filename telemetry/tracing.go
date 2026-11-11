@@ -14,7 +14,7 @@ import (
 
 // tracerName is the instrumentation-scope name for this service's own spans:
 // the management API's server spans and the database spans below.
-const tracerName = "github.com/telflo/opamp-server"
+const tracerName = "github.com/telflo/telflo-opamp-server"
 
 // Tracer is the tracer for this service's own spans. When telemetry is not
 // configured the global tracer provider is a no-op.

@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/enrollmenttokens"
+	"github.com/telflo/telflo-opamp-server/store/enrollmenttokens"
 )
 
 // fleetConformanceCases are the conformance cases of the fleet, group and

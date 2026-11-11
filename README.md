@@ -14,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/telflo/opamp-server/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/telflo/opamp-server/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <a href="https://github.com/telflo/opamp-server/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/telflo/opamp-server"></a>
-  <a href="go.mod"><img alt="Go" src="https://img.shields.io/github/go-mod/go-version/telflo/opamp-server"></a>
+  <a href="https://github.com/telflo/telflo-opamp-server/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/telflo/telflo-opamp-server/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/telflo/telflo-opamp-server/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/telflo/telflo-opamp-server"></a>
+  <a href="go.mod"><img alt="Go" src="https://img.shields.io/github/go-mod/go-version/telflo/telflo-opamp-server"></a>
   <a href="LICENSE"><img alt="Licence" src="https://img.shields.io/badge/licence-Apache%202.0-blue"></a>
 </p>
 
@@ -24,7 +24,7 @@
   <a href="#quick-start-docker"><strong>Quick start</strong></a> ·
   <a href="#documentation"><strong>Docs</strong></a> ·
   <a href="api/openapi.yaml"><strong>API reference</strong></a> ·
-  <a href="charts/opamp-server/README.md"><strong>Helm chart</strong></a> ·
+  <a href="charts/telflo-opamp-server/README.md"><strong>Helm chart</strong></a> ·
   <a href="CHANGELOG.md"><strong>Changelog</strong></a>
 </p>
 
@@ -348,7 +348,7 @@ setopt interactivecomments
 
 ```sh
 # Download the repository and go into it.
-git clone https://github.com/telflo/opamp-server.git
+git clone https://github.com/telflo/telflo-opamp-server.git
 cd opamp-server
 ```
 
@@ -604,7 +604,7 @@ your machine, start the server in step 2 with
   collector your own way; the [Quick start](#quick-start-docker) shows one.
 - **The Helm chart renders no Ingress, autoscaler or Secret.** You bring
   those, so they fit your cluster
-  ([charts/opamp-server/README.md](charts/opamp-server/README.md)).
+  ([charts/telflo-opamp-server/README.md](charts/telflo-opamp-server/README.md)).
 
 ## Compatibility
 
@@ -700,7 +700,7 @@ It's a development database from before the first release. Drop the
 - [docs/postgres-in-docker.md](docs/postgres-in-docker.md): PostgreSQL in a
   container, set up for opamp-server, with backups and restores
 - [docs/kubernetes.md](docs/kubernetes.md) and the
-  [chart's README](charts/opamp-server/README.md): the Helm chart, every
+  [chart's README](charts/telflo-opamp-server/README.md): the Helm chart, every
   value, and the Quick start on minikube
 - [docs/upgrading.md](docs/upgrading.md) and [CHANGELOG.md](CHANGELOG.md):
   what each release changed, and what an upgrade needs from you
@@ -732,7 +732,7 @@ It's a development database from before the first release. Drop the
 
 - **A question, or something not working:** check
   [Troubleshooting](#troubleshooting) first, then
-  [open an issue →](https://github.com/telflo/opamp-server/issues/new/choose).
+  [open an issue →](https://github.com/telflo/telflo-opamp-server/issues/new/choose).
   The bug report form asks for what helps most: the version, how you run
   it, and the logs.
 - **A feature you need:** open an issue with the feature request form.

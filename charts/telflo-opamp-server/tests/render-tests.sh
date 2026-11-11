@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Render tests for charts/opamp-server.
+# Render tests for charts/telflo-opamp-server.
 #
 # `helm lint --strict` can't catch most of these: it lints with the values it
 # is given, and only warns on a failing `required`. So every guard, refusal,
 # name, credential reference and security setting is pinned here by a real
 # `helm template`.
 #
-# Run:  bash charts/opamp-server/tests/render-tests.sh
+# Run:  bash charts/telflo-opamp-server/tests/render-tests.sh
 #
 # Offline and credential-free: only `helm template` and `helm lint` (no
 # registry, no cluster, no --debug). Every HELM_* variable is unset; Helm's
@@ -39,7 +39,7 @@ export HELM_CACHE_HOME="$tmp/helm/cache" HELM_CONFIG_HOME="$tmp/helm/config" HEL
 
 REL=rel
 NS=opamp
-FULL=rel-opamp-server
+FULL=rel-telflo-opamp-server
 # The agent endpoint's Deployment, and the management API's (…M).
 D="Deployment/$FULL-agent"
 POD="$D.spec.template.spec"
@@ -155,7 +155,7 @@ refused() {
   next_file
   if render "$f" "$@"; then return 1; fi
   [ "$(grep -c '^Error:' "$f.err")" = 1 ] || return 1
-  sed -n 's/^Error: execution error at (opamp-server\/templates\/[a-z-]*\.yaml:[0-9]*:[0-9]*): //p' "$f.err" >"$f.msg"
+  sed -n 's/^Error: execution error at (telflo-opamp-server\/templates\/[a-z-]*\.yaml:[0-9]*:[0-9]*): //p' "$f.err" >"$f.msg"
   grep -qxF -- "$msg" "$f.msg" || return 1
   [ -z "$canary" ] || ! grep -qF -- "$canary" "$f" "$f.err"
 }
@@ -213,8 +213,8 @@ run_case ".helmignore leaves tests/ out of the package" helmignore_tests
 chart_yaml() {
   local c="$CHART_DIR/Chart.yaml"
   [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] &&
-    grep -qx 'name: opamp-server' "$c" && grep -qx "version: $VERSION" "$c" && grep -qx "appVersion: \"$VERSION\"" "$c" &&
-    grep -qx 'home: https://github.com/telflo/opamp-server' "$c" && grep -qx '  - https://github.com/telflo/opamp-server' "$c" &&
+    grep -qx 'name: telflo-opamp-server' "$c" && grep -qx "version: $VERSION" "$c" && grep -qx "appVersion: \"$VERSION\"" "$c" &&
+    grep -qx 'home: https://github.com/telflo/telflo-opamp-server' "$c" && grep -qx '  - https://github.com/telflo/telflo-opamp-server' "$c" &&
     grep -q '^kubeVersion: ' "$c"
 }
 run_case "Chart.yaml: name, version X.Y.Z and appVersion the same, home, sources, kubeVersion" chart_yaml
@@ -303,8 +303,8 @@ both_eq() { eq "$L" "$D$1" "$2" && eq "$L" "$DM$1" "$2"; }
 run_case "one replica of each by default" both_eq .spec.replicas 1
 rolling() { both_eq .spec.strategy.type '"RollingUpdate"' && both_eq .spec.strategy.rollingUpdate.maxUnavailable 0; }
 run_case "RollingUpdate, never a pod short (both)" rolling
-run_case "the servers' image is ghcr.io/telflo/opamp-server:<appVersion> (both)" both_eq .spec.template.spec.containers[serve].image "\"ghcr.io/telflo/opamp-server:$VERSION\""
-run_case "migrate runs the same image (both)" both_eq .spec.template.spec.initContainers[migrate].image "\"ghcr.io/telflo/opamp-server:$VERSION\""
+run_case "the servers' image is ghcr.io/telflo/telflo-opamp-server:<appVersion> (both)" both_eq .spec.template.spec.containers[serve].image "\"ghcr.io/telflo/telflo-opamp-server:$VERSION\""
+run_case "migrate runs the same image (both)" both_eq .spec.template.spec.initContainers[migrate].image "\"ghcr.io/telflo/telflo-opamp-server:$VERSION\""
 mig_args() {
   local d
   for d in "$POD" "$PODM"; do
@@ -853,7 +853,7 @@ FSM="Deployment/opamp-management.spec.template.spec"
 full_image() {
   local s
   for s in "$FS" "$FSM"; do
-    eq "$F" "$s.containers[serve].image" '"ghcr.io/telflo/opamp-server:0.1.0@sha256:0000000000000000000000000000000000000000000000000000000000000001"' &&
+    eq "$F" "$s.containers[serve].image" '"ghcr.io/telflo/telflo-opamp-server:0.1.0@sha256:0000000000000000000000000000000000000000000000000000000000000001"' &&
       eq "$F" "$s.containers[serve].imagePullPolicy" '"Always"' || return 1
   done
 }
@@ -939,8 +939,8 @@ name_override() {
 run_case "nameOverride" name_override
 release_holds_name() {
   next_file
-  helm template my-opamp-server "$CHART_DIR" -n "$NS" "${B[@]}" >"$f.yaml" 2>"$f.err" && flat "$f.yaml" "$f" || return 1
-  kinds "$f" | grep -qx 'Deployment/my-opamp-server-agent'
+  helm template my-telflo-opamp-server "$CHART_DIR" -n "$NS" "${B[@]}" >"$f.yaml" 2>"$f.err" && flat "$f.yaml" "$f" || return 1
+  kinds "$f" | grep -qx 'Deployment/my-telflo-opamp-server-agent'
 }
 run_case "a release whose name holds the chart's is its own fullname" release_holds_name
 long_name() {
@@ -959,13 +959,13 @@ subchart() { # <extra parent values...>
   next_file
   local parent="$f.parent"
   mkdir -p "$parent/charts" || return 1
-  cp -R "$CHART_DIR" "$parent/charts/opamp-server" || return 1
-  rm -rf "$parent/charts/opamp-server/tests"
-  printf 'apiVersion: v2\nname: parent\nversion: 0.0.0\ndependencies:\n  - name: opamp-server\n    version: %s\n    condition: opamp-server.enabled\n' "$VERSION" >"$parent/Chart.yaml"
+  cp -R "$CHART_DIR" "$parent/charts/telflo-opamp-server" || return 1
+  rm -rf "$parent/charts/telflo-opamp-server/tests"
+  printf 'apiVersion: v2\nname: parent\nversion: 0.0.0\ndependencies:\n  - name: telflo-opamp-server\n    version: %s\n    condition: telflo-opamp-server.enabled\n' "$VERSION" >"$parent/Chart.yaml"
   cat >"$parent/values.yaml" <<'VALUES'
 global:
   example: shared
-opamp-server:
+telflo-opamp-server:
   enabled: true
   server:
     publicUrl: https://opamp.example.com/opamp/api/v1
@@ -978,11 +978,11 @@ opamp-server:
     sslmode: require
 VALUES
   helm template p "$parent" -n "$NS" "$@" >"$f.yaml" 2>"$f.err" && flat "$f.yaml" "$f" || return 1
-  kinds "$f" | grep -qx 'Deployment/p-opamp-server-agent' && kinds "$f" | grep -qx 'Deployment/p-opamp-server-management' &&
+  kinds "$f" | grep -qx 'Deployment/p-telflo-opamp-server-agent' && kinds "$f" | grep -qx 'Deployment/p-telflo-opamp-server-management' &&
     ! kinds "$f" | grep -q '^StatefulSet/'
 }
 run_case "renders as a subchart (the parent sets global and enabled; the schema allows both at its root)" subchart
-sub_disabled() { next_file; subchart --set opamp-server.enabled=false; [ $? -ne 0 ] && [ -s "$f.yaml" ] && ! grep -q 'kind: Deployment' "$f.yaml"; }
+sub_disabled() { next_file; subchart --set telflo-opamp-server.enabled=false; [ $? -ne 0 ] && [ -s "$f.yaml" ] && ! grep -q 'kind: Deployment' "$f.yaml"; }
 run_case "a parent's condition (enabled false) leaves it out" sub_disabled
 run_case "enabled must be a boolean" schema_refused /enabled "want boolean" "${B[@]}" --set-string enabled=cnry
 run_case "global must be an object" schema_refused /global "want object" "${B[@]}" --set-string global=cnry

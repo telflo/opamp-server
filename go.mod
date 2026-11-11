@@ -1,4 +1,4 @@
-module github.com/telflo/opamp-server
+module github.com/telflo/telflo-opamp-server
 
 go 1.27.3
 

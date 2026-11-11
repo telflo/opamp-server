@@ -19,9 +19,9 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	"github.com/telflo/opamp-server/agent"
-	"github.com/telflo/opamp-server/middleware"
-	"github.com/telflo/opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/agent"
+	"github.com/telflo/telflo-opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
 )
 
 // probe sends method target through handler, with a user agent and a

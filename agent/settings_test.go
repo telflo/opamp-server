@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/telflo/opamp-server/internal/envconfig"
-	"github.com/telflo/opamp-server/internal/testcert"
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/internal/envconfig"
+	"github.com/telflo/telflo-opamp-server/internal/testcert"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 // The agent listener's settings, as LoadSettings reads them with only

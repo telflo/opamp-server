@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/telflo/opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/management"
 )
 
 // composeValues are the development management secret and encryption key
@@ -121,7 +121,7 @@ func TestOnlyComposeTurnsOnTheDevelopmentSecrets(t *testing.T) {
 	if n := strings.Count(string(compose), AllowDevelopmentSecretsVariable+`: "true"`); n != 2 {
 		t.Fatalf("compose.yaml turns it on %d times, want 2 (the agent and the management API)", n)
 	}
-	for _, path := range []string{"../charts/opamp-server/values.yaml", "../charts/opamp-server/templates/_server.tpl",
+	for _, path := range []string{"../charts/telflo-opamp-server/values.yaml", "../charts/telflo-opamp-server/templates/_server.tpl",
 		"../deploy/quickstart-collector/kubernetes.yaml", "../.env.example"} {
 		content, err := os.ReadFile(path)
 		if err != nil {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
 )
 
 // The collector routes: a fleet's collectors (openapi.yaml's

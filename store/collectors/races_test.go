@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/telflo/opamp-server/store/collectorgroups"
-	"github.com/telflo/opamp-server/store/collectors"
-	"github.com/telflo/opamp-server/store/fleets"
-	. "github.com/telflo/opamp-server/store/storetest"
+	"github.com/telflo/telflo-opamp-server/store/collectorgroups"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/fleets"
+	. "github.com/telflo/telflo-opamp-server/store/storetest"
 )
 
 // blockOn has a third session (the owner's) take a lock with statement,

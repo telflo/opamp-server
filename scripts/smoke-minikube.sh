@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The chart's smoke test: a real install of charts/opamp-server on a
+# The chart's smoke test: a real install of charts/telflo-opamp-server on a
 # throwaway minikube profile, checked end to end, then removed.
 #
 #   scripts/smoke-minikube.sh [--profile <name>] [--work <dir>] [--image <ref>] [--timeout <seconds>]
@@ -12,7 +12,7 @@
 # postgres:18 already in the local Docker engine (nothing is pulled from a
 # registry, except by --published, below); and 6 GB free in Docker's disk.
 #
-# The first form installs this tree's chart (charts/opamp-server next to
+# The first form installs this tree's chart (charts/telflo-opamp-server next to
 # this script; the tree needn't be a git checkout) with the local image:
 #   1. minikube start -p <profile> --driver=docker, a profile of its own
 #      (default opamp-smoke). It refuses the profile `minikube` and any profile
@@ -52,8 +52,8 @@
 #      registry credential Secret in the cluster.
 #
 # --published <version> is the check after a release is published: on the
-# host, it pulls ghcr.io/telflo/opamp-server:<version> and the chart
-# oci://ghcr.io/telflo/charts/opamp-server --version <version>, through the
+# host, it pulls ghcr.io/telflo/telflo-opamp-server:<version> and the chart
+# oci://ghcr.io/telflo/charts/telflo-opamp-server --version <version>, through the
 # DOCKER_CONFIG and HELM_REGISTRY_CONFIG the caller exports (a temporary
 # login's, its credentials inline; never Docker's or Helm's default ones),
 # loads that image into the profile and installs the pulled chart's .tgz.
@@ -100,14 +100,14 @@ PROGRAM=smoke-minikube
 DEFAULT_PROFILE=opamp-smoke
 RELEASE=opamp
 NS=opamp
-FULLNAME=opamp-opamp-server
+FULLNAME=opamp-telflo-opamp-server
 SERVER_SECRET=opamp-server
 POSTGRES_SECRET=opamp-server-postgres
 POSTGRES_POD=$FULLNAME-postgres-0
 DATABASE=telflo_opamp
 REPLICAS=1
-PUBLISHED_IMAGE_REPOSITORY=ghcr.io/telflo/opamp-server
-PUBLISHED_CHART=oci://ghcr.io/telflo/charts/opamp-server
+PUBLISHED_IMAGE_REPOSITORY=ghcr.io/telflo/telflo-opamp-server
+PUBLISHED_CHART=oci://ghcr.io/telflo/charts/telflo-opamp-server
 # The README's bootstrap re-run (README.md, "Upgrading"), run as written:
 # the run fails if the README no longer holds this line.
 RERUN_COMMAND="kubectl -n $NS exec $POSTGRES_POD -c postgres -- /docker-entrypoint-initdb.d/initdb.sh"
@@ -170,7 +170,7 @@ else
 fi
 
 REPO=$(cd "$(dirname "$0")/.." && pwd -P)
-CHART_DIR=$REPO/charts/opamp-server
+CHART_DIR=$REPO/charts/telflo-opamp-server
 [ -n "$PUBLISHED" ] || [ -f "$CHART_DIR/Chart.yaml" ] || refuse "no chart at $CHART_DIR"
 
 # The caller's registry configs, for --published's two pulls only: read here,
@@ -676,7 +676,7 @@ $(shown "$LOGS/pull-image.log" 10)"
     fail "helm pull $PUBLISHED_CHART --version $PUBLISHED failed:
 $(shown "$LOGS/pull-chart.log" 10)"
   if called=$(helpers_called); then fail "a credential helper was called during the pulls ($called): the login must keep its credentials inline"; fi
-  CHART_REF=$WORK/published/opamp-server-$PUBLISHED.tgz
+  CHART_REF=$WORK/published/telflo-opamp-server-$PUBLISHED.tgz
   [ -f "$CHART_REF" ] || fail "helm pull wrote no $CHART_REF"
   helm show chart "$CHART_REF" >"$STATE/published-chart.yaml" 2>"$LOGS/pull-chart.log" || fail "helm show chart $CHART_REF failed"
   chart_version=$(sed -n 's/^version: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "$STATE/published-chart.yaml")

@@ -17,7 +17,7 @@
 
 // Settings come from the environment in three groups. The Helm chart sets
 // each one from its Secret, a TLS Secret or its values
-// (charts/opamp-server/README.md).
+// (charts/telflo-opamp-server/README.md).
 //
 // Credentials, to be kept in a secret store and never in a plain config file:
 //
@@ -120,7 +120,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/telflo/opamp-server/serve"
+	"github.com/telflo/telflo-opamp-server/serve"
 )
 
 const usage = "usage: opamp-server serve [agent|management] | migrate up|status | migrate down " + yesDropData +

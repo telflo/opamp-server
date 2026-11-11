@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/telflo/opamp-server/internal/testcert"
+	"github.com/telflo/telflo-opamp-server/internal/testcert"
 )
 
 func envOf(values map[string]string) func(string) string {

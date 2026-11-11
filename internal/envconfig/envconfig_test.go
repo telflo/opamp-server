@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/telflo/opamp-server/internal/testcert"
+	"github.com/telflo/telflo-opamp-server/internal/testcert"
 )
 
 // envOf is a Getenv over values.

@@ -10,13 +10,13 @@ secret never reaches the agent endpoint's pods. A database URL's password
 variable is always listed before the URL, so Kubernetes' $(VAR) expansion
 fills it in.
 */}}
-{{- define "opamp-server.server" -}}
+{{- define "telflo-opamp-server.server" -}}
 {{- $ := .ctx }}
 {{- $component := .component }}
 {{- $agent := eq $component "agent" }}
-{{- $secret := include "opamp-server.secretName" $ }}
-{{- $whole := include "opamp-server.wholeUrls" $ }}
-{{- $image := include "opamp-server.imageRef" (list $.Values.image $.Chart.AppVersion) }}
+{{- $secret := include "telflo-opamp-server.secretName" $ }}
+{{- $whole := include "telflo-opamp-server.wholeUrls" $ }}
+{{- $image := include "telflo-opamp-server.imageRef" (list $.Values.image $.Chart.AppVersion) }}
 {{- $s := $.Values.server }}
 {{- $c := index $s $component }}
 {{- $tls := $c.tls.secretName }}
@@ -25,9 +25,9 @@ fills it in.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ printf "%s-%s" (include "opamp-server.fullname" $) $component | quote }}
+  name: {{ printf "%s-%s" (include "telflo-opamp-server.fullname" $) $component | quote }}
   labels:
-    {{- include "opamp-server.labels" (dict "ctx" $ "component" $component) | nindent 4 }}
+    {{- include "telflo-opamp-server.labels" (dict "ctx" $ "component" $component) | nindent 4 }}
 spec:
   replicas: {{ int $c.replicas }}
   strategy:
@@ -37,11 +37,11 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      {{- include "opamp-server.selectorLabels" (dict "ctx" $ "component" $component) | nindent 6 }}
+      {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" $ "component" $component) | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "opamp-server.labels" (dict "ctx" $ "component" $component) | nindent 8 }}
+        {{- include "telflo-opamp-server.labels" (dict "ctx" $ "component" $component) | nindent 8 }}
         {{- with $.Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -50,7 +50,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "opamp-server.serviceAccountName" $ | quote }}
+      serviceAccountName: {{ include "telflo-opamp-server.serviceAccountName" $ | quote }}
       automountServiceAccountToken: false
       {{- with $.Values.imagePullSecrets }}
       imagePullSecrets:
@@ -76,19 +76,19 @@ spec:
         # bundled Postgres answers on TCP, which it does only once its first
         # start's bootstrap is done. It holds no credential.
         - name: wait-for-postgres
-          image: {{ include "opamp-server.imageRef" (list $.Values.postgres.image "18") | quote }}
+          image: {{ include "telflo-opamp-server.imageRef" (list $.Values.postgres.image "18") | quote }}
           imagePullPolicy: {{ $.Values.postgres.image.pullPolicy | quote }}
           command:
             - sh
             - -c
-            - {{ printf "until pg_isready -q -h %s -p 5432 -U postgres -d postgres; do sleep 2; done" (include "opamp-server.postgresName" $) | quote }}
+            - {{ printf "until pg_isready -q -h %s -p 5432 -U postgres -d postgres; do sleep 2; done" (include "telflo-opamp-server.postgresName" $) | quote }}
           {{- with $c.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           securityContext:
             # 999, the postgres image's own user: its tools look their user up.
-            {{- include "opamp-server.containerSecurityContext" 999 | nindent 12 }}
+            {{- include "telflo-opamp-server.containerSecurityContext" 999 | nindent 12 }}
         {{- end }}
         - name: migrate
           image: {{ $image | quote }}
@@ -108,14 +108,14 @@ spec:
                   name: {{ $secret | quote }}
                   key: owner-password
             - name: OPAMP_MIGRATION_DATABASE_URL
-              value: {{ include "opamp-server.databaseUrl" (list $ "telflo_opamp_owner" "OPAMP_OWNER_PASSWORD") | quote }}
+              value: {{ include "telflo-opamp-server.databaseUrl" (list $ "telflo_opamp_owner" "OPAMP_OWNER_PASSWORD") | quote }}
             {{- end }}
           {{- with $c.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           securityContext:
-            {{- include "opamp-server.containerSecurityContext" 65532 | nindent 12 }}
+            {{- include "telflo-opamp-server.containerSecurityContext" 65532 | nindent 12 }}
       containers:
         - name: serve
           image: {{ $image | quote }}
@@ -139,7 +139,7 @@ spec:
                   name: {{ $secret | quote }}
                   key: runtime-password
             - name: OPAMP_DATABASE_URL
-              value: {{ include "opamp-server.databaseUrl" (list $ "telflo_opamp" "OPAMP_RUNTIME_PASSWORD") | quote }}
+              value: {{ include "telflo-opamp-server.databaseUrl" (list $ "telflo_opamp" "OPAMP_RUNTIME_PASSWORD") | quote }}
             {{- end }}
             {{- if not $agent }}
             - name: OPAMP_MANAGEMENT_SECRET
@@ -163,7 +163,7 @@ spec:
             {{- end }}
             {{- if $agent }}
             - name: OPAMP_SERVER_URL
-              value: {{ include "opamp-server.envLiteral" $s.publicUrl }}
+              value: {{ include "telflo-opamp-server.envLiteral" $s.publicUrl }}
             {{- end }}
             {{- if $tls }}
             - name: {{ printf "OPAMP_%s_TLS_CERT_FILE" (upper $component) | quote }}
@@ -180,26 +180,26 @@ spec:
             {{- $setting := index $s $name }}
             {{- if not (kindIs "invalid" $setting) }}
             - name: {{ $variable | quote }}
-              value: {{ include "opamp-server.envLiteral" (int $setting | toString) }}
+              value: {{ include "telflo-opamp-server.envLiteral" (int $setting | toString) }}
             {{- end }}
             {{- end }}
             {{- with $s.telemetry.otlpEndpoint }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: {{ include "opamp-server.envLiteral" . }}
+              value: {{ include "telflo-opamp-server.envLiteral" . }}
             {{- end }}
             {{- with $s.telemetry.serviceName }}
             - name: OTEL_SERVICE_NAME
-              value: {{ include "opamp-server.envLiteral" . }}
+              value: {{ include "telflo-opamp-server.envLiteral" . }}
             {{- end }}
             {{- with $s.telemetry.resourceAttributes }}
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: {{ include "opamp-server.envLiteral" . }}
+              value: {{ include "telflo-opamp-server.envLiteral" . }}
             {{- end }}
             {{- /* Plain values literal (escaped as above); valueFrom as given. */}}
             {{- range $.Values.extraEnv }}
             - name: {{ .name | quote }}
               {{- if not (kindIs "invalid" .value) }}
-              value: {{ include "opamp-server.envLiteral" .value }}
+              value: {{ include "telflo-opamp-server.envLiteral" .value }}
               {{- end }}
               {{- with .valueFrom }}
               valueFrom:
@@ -242,7 +242,7 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           securityContext:
-            {{- include "opamp-server.containerSecurityContext" 65532 | nindent 12 }}
+            {{- include "telflo-opamp-server.containerSecurityContext" 65532 | nindent 12 }}
       volumes:
         # Only the encryption key (and, during a rotation, the previous
         # keys) of the server's Secret: files readable by their owner and the

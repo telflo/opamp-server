@@ -15,12 +15,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opamp-go/protobufs"
 
-	"github.com/telflo/opamp-server/agent"
-	"github.com/telflo/opamp-server/agent/agenttest"
-	"github.com/telflo/opamp-server/management"
-	"github.com/telflo/opamp-server/management/managementtest"
-	"github.com/telflo/opamp-server/store/database/databasetest"
-	"github.com/telflo/opamp-server/tokens"
+	"github.com/telflo/telflo-opamp-server/agent"
+	"github.com/telflo/telflo-opamp-server/agent/agenttest"
+	"github.com/telflo/telflo-opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/management/managementtest"
+	"github.com/telflo/telflo-opamp-server/store/database/databasetest"
+	"github.com/telflo/telflo-opamp-server/tokens"
 )
 
 // testDatabase is this package's test database: each package has its own

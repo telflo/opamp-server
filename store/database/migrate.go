@@ -12,7 +12,7 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/lock"
 
-	"github.com/telflo/opamp-server/migrations"
+	"github.com/telflo/telflo-opamp-server/migrations"
 )
 
 // Migrator applies the embedded migrations. It connects as the owner, with

@@ -3,8 +3,8 @@ package agent
 import (
 	"fmt"
 
-	"github.com/telflo/opamp-server/internal/envconfig"
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/internal/envconfig"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 // The agent side's limits' settings, each counted per pod. serve reads them

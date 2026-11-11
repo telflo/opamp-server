@@ -1,8 +1,8 @@
 # Run it on Kubernetes
 
-The Helm chart in [`charts/opamp-server/`](../charts/opamp-server/) installs
-the server as two Deployments, `<release>-opamp-server-agent` (`serve agent`)
-and `<release>-opamp-server-management` (`serve management`), each with its
+The Helm chart in [`charts/telflo-opamp-server/`](../charts/telflo-opamp-server/) installs
+the server as two Deployments, `<release>-telflo-opamp-server-agent` (`serve agent`)
+and `<release>-telflo-opamp-server-management` (`serve management`), each with its
 own `replicas`, `resources` and disruption budget under `server.agent` and
 `server.management`, with a Postgres of its own by default or one you run.
 Each pod migrates the database before it serves.
@@ -20,14 +20,14 @@ kubectl -n opamp create secret generic opamp-server \
 kubectl -n opamp create secret generic opamp-server-postgres --from-file=postgres-password
 
 # 2. The chart. publicUrl is the agent endpoint's URL as collectors reach it.
-helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.2.4 -n opamp \
+helm install opamp oci://ghcr.io/telflo/charts/telflo-opamp-server --version 0.2.4 -n opamp \
   --set auth.existingSecret=opamp-server \
   --set postgres.auth.existingSecret=opamp-server-postgres \
   --set server.publicUrl=https://opamp.example.com/opamp/api/v1
 
 # 3. Check it. Forward the management API to this machine; this keeps
 #    running until Ctrl-C, so leave it in this terminal.
-kubectl -n opamp port-forward svc/opamp-opamp-server-management 51235:51235
+kubectl -n opamp port-forward svc/opamp-telflo-opamp-server-management 51235:51235
 
 #    Then, in a second terminal, ask it whether it's healthy: it answers ok.
 curl -sS http://127.0.0.1:51235/health
@@ -61,14 +61,14 @@ is `ClusterIP` by default too. For collectors outside the cluster, set
 `service.agent.annotations`, or route an Ingress or Gateway of your own
 to it. Terminate TLS at the load balancer, or give the pods a
 certificate with `server.agent.tls.secretName`. The
-[chart's README](../charts/opamp-server/README.md) has every value, external
+[chart's README](../charts/telflo-opamp-server/README.md) has every value, external
 Postgres, TLS, upgrades, and `make smoke`, which installs the chart on a
 throwaway minikube cluster and checks it end to end.
 
 **The quick start on minikube.** Install the chart as above, but with the
 agent endpoint's in-cluster address as `server.publicUrl`, since the
 collector runs in the cluster:
-`--set server.publicUrl=http://opamp-opamp-server-agent.opamp.svc:51234/opamp/api/v1`.
+`--set server.publicUrl=http://opamp-telflo-opamp-server-agent.opamp.svc:51234/opamp/api/v1`.
 Keep the port-forward from the install's step 3 running. Then, in a second
 terminal, from this checkout, run its `setopt interactivecomments` line
 if you use zsh, and follow the [Quick start](../README.md#quick-start-docker)'s steps 4 to 12

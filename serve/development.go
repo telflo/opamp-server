@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/telflo/opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/management"
 )
 
 // AllowDevelopmentSecretsVariable lets serve start on the development

@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/telflo/opamp-server/agent"
-	"github.com/telflo/opamp-server/internal/envconfig"
-	"github.com/telflo/opamp-server/management"
+	"github.com/telflo/telflo-opamp-server/agent"
+	"github.com/telflo/telflo-opamp-server/internal/envconfig"
+	"github.com/telflo/telflo-opamp-server/management"
 )
 
 // healthcheckTimeout bounds the request, under any sensible health check

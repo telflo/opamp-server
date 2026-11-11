@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/agent/agenttest"
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/agent/agenttest"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 // pollAs sends one poll with bearer through an agent listener's handler,

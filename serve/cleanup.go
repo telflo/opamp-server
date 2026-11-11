@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/telflo/opamp-server/store/collectors"
+	"github.com/telflo/telflo-opamp-server/store/collectors"
 )
 
 // The error history's cleanup: a collector's error rows are kept

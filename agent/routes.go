@@ -4,8 +4,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/telflo/opamp-server/handlers"
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/handlers"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 // The agent listener: the port collectors poll, apart from the management

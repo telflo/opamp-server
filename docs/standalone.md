@@ -34,8 +34,8 @@ os=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
 
 # Download the latest release for them, and the release's checksums.
-curl -fsSLO "https://github.com/telflo/opamp-server/releases/latest/download/opamp-server_${os}_${arch}.tar.gz"
-curl -fsSLO https://github.com/telflo/opamp-server/releases/latest/download/checksums.txt
+curl -fsSLO "https://github.com/telflo/telflo-opamp-server/releases/latest/download/opamp-server_${os}_${arch}.tar.gz"
+curl -fsSLO https://github.com/telflo/telflo-opamp-server/releases/latest/download/checksums.txt
 
 # Check the download against its checksum: it answers OK.
 grep " opamp-server_${os}_${arch}.tar.gz\$" checksums.txt | shasum -a 256 -c -
@@ -208,7 +208,7 @@ a container locally where `localhost:51234` is your `serve agent`:
 ```sh
 # Build the collector's image from the repository's deploy/quickstart-collector.
 docker build -t opamp-quickstart-collector:dev \
-  "https://github.com/telflo/opamp-server.git#main:deploy/quickstart-collector"
+  "https://github.com/telflo/telflo-opamp-server.git#main:deploy/quickstart-collector"
 
 # Start it on this machine's network, joining with the token and group you exported.
 docker run -d --name opamp-collector --network host \

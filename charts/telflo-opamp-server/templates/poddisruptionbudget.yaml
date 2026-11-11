@@ -1,0 +1,23 @@
+{{- include "telflo-opamp-server.guards" . }}
+{{- /* A disruption budget per component, each when its own is enabled. */}}
+{{- range $component := list "agent" "management" }}
+{{- $pdb := (index $.Values.server $component).podDisruptionBudget }}
+{{- if $pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ printf "%s-%s" (include "telflo-opamp-server.fullname" $) $component | quote }}
+  labels:
+    {{- include "telflo-opamp-server.labels" (dict "ctx" $ "component" $component) | nindent 4 }}
+spec:
+  {{- if not (kindIs "invalid" $pdb.minAvailable) }}
+  minAvailable: {{ include "telflo-opamp-server.intOrString" $pdb.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ include "telflo-opamp-server.intOrString" $pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "telflo-opamp-server.selectorLabels" (dict "ctx" $ "component" $component) | nindent 6 }}
+{{- end }}
+{{- end }}

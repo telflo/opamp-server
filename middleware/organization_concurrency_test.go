@@ -18,7 +18,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/telflo/opamp-server/store/enrollmenttokens"
+	"github.com/telflo/telflo-opamp-server/store/enrollmenttokens"
 )
 
 // rowsLookup answers each token's row from a map.

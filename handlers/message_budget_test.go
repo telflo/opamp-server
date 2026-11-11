@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/telflo/opamp-server/middleware"
+	"github.com/telflo/telflo-opamp-server/middleware"
 )
 
 var agentToServer = (&protobufs.AgentToServer{}).ProtoReflect().Descriptor()

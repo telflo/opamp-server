@@ -6,7 +6,7 @@ import (
 	"math"
 	"net/http"
 
-	"github.com/telflo/opamp-server/store/organizations"
+	"github.com/telflo/telflo-opamp-server/store/organizations"
 )
 
 // The organization's limits: the most collectors it may have enrolled, and

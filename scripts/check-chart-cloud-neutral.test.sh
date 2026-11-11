@@ -16,7 +16,7 @@ set -u
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CHECK="$REPO_DIR/scripts/check-chart-cloud-neutral.sh"
-CHART_DIR="$REPO_DIR/charts/opamp-server"
+CHART_DIR="$REPO_DIR/charts/telflo-opamp-server"
 FIXTURES="$REPO_DIR/scripts/testdata/cloud-neutral"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/cloud-neutral-test.XXXXXX")" || exit 2
@@ -69,7 +69,7 @@ run_case "a marker only in values.yaml (a comment, never rendered) fails" in_val
 
 in_schema() {
   fresh || return 1
-  sed "s|\"title\": \"opamp-server chart values\"|\"title\": \"opamp-server chart values $(cat "$FIXTURES/schema-marker.txt")\"|" \
+  sed "s|\"title\": \"telflo-opamp-server chart values\"|\"title\": \"telflo-opamp-server chart values $(cat "$FIXTURES/schema-marker.txt")\"|" \
     "$CHART_DIR/values.schema.json" >"$c/chart/values.schema.json" && check
   fails_with "packaged file values.schema.json holds the cloud marker azure.workload.identity" && no_fail_matching "rendered with"
 }
