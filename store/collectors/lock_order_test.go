@@ -36,7 +36,7 @@ func TestAnOrganizationsDeleteRacingRecordErrorDoesNotDeadlock(t *testing.T) {
 	Each(t, testDatabase, func(t *testing.T, s *Stores) {
 		c := s.CreateFleet(t, OrgA, "edge-prod", fleets.TypeServer)
 		got := enroll(t, s, c, "edge-01", Now)
-		release := blockOn(t, s, 2, `select 1 from telflo_opamp.collector_instances
+		release := blockOn(t, s, 2, `select 1 from opamp_server.collector_instances
 			where organization_id = $1 and id = $2 for update`, OrgA, got.ID)
 		var recordErr, deleteErr error
 		var deleted bool
@@ -81,7 +81,7 @@ func TestBulkPinRacingAGroupsDeleteDoesNotDeadlock(t *testing.T) {
 		low := uuid.MustParse("00000000-0000-4000-8000-000000000001")
 		s.InsertCollector(t, Collector{ID: high, OrganizationID: OrgA, FleetID: c.Fleet.ID, GroupID: g.ID, Name: "c-high", LastSeenAt: Now})
 		s.InsertCollector(t, Collector{ID: low, OrganizationID: OrgA, FleetID: c.Fleet.ID, GroupID: g.ID, Name: "c-low", LastSeenAt: Now})
-		release := blockOn(t, s, 2, `select 1 from telflo_opamp.collector_instances
+		release := blockOn(t, s, 2, `select 1 from opamp_server.collector_instances
 			where organization_id = $1 and id = $2 for no key update`, OrgA, high)
 		var deleted bool
 		var pinned collectors.BulkPinResult
@@ -141,7 +141,7 @@ func TestMoveRacingAGroupsDeleteDoesNotDeadlock(t *testing.T) {
 			if into {
 				moving, target = y, g.ID
 			}
-			release := blockOn(t, s, 2, `select 1 from telflo_opamp.collector_instances
+			release := blockOn(t, s, 2, `select 1 from opamp_server.collector_instances
 				where organization_id = $1 and id = $2 for no key update`, OrgA, x)
 			var deleted bool
 			var deleteErr, moveErr error
@@ -324,7 +324,7 @@ func TestAVariableDeleteRacingAnAssignmentNeverLeavesAnUndefinedName(t *testing.
 				t.Fatal(err)
 			}
 			collector := enroll(t, s, c, fmt.Sprintf("edge-%d", round), Now)
-			release := blockOn(t, s, 2, `select 1 from telflo_opamp.organizations where id = $1 for update`, OrgA)
+			release := blockOn(t, s, 2, `select 1 from opamp_server.organizations where id = $1 for update`, OrgA)
 			errs := both(release, func() error {
 				if viaPin {
 					_, err := s.Collectors.Pin(ctx, OrgA, c.Fleet.ID, collector.ID,
@@ -383,9 +383,9 @@ func waitingQueries(t *testing.T, s *Stores) []string {
 // update`, which every write of theirs waits on, or behind one that does.
 func heldAt(c fleets.Creation, group uuid.UUID) map[string][]any {
 	return map[string][]any{
-		"the organization": {`select 1 from telflo_opamp.organizations where id = $1 for update`, OrgA},
-		"the fleet":        {`select 1 from telflo_opamp.fleets where organization_id = $1 and id = $2 for update`, OrgA, c.Fleet.ID},
-		"the group": {`select 1 from telflo_opamp.collector_groups where organization_id = $1 and fleet_id = $2 and id = $3 for update`,
+		"the organization": {`select 1 from opamp_server.organizations where id = $1 for update`, OrgA},
+		"the fleet":        {`select 1 from opamp_server.fleets where organization_id = $1 and id = $2 for update`, OrgA, c.Fleet.ID},
+		"the group": {`select 1 from opamp_server.collector_groups where organization_id = $1 and fleet_id = $2 and id = $3 for update`,
 			OrgA, c.Fleet.ID, group},
 	}
 }
@@ -436,9 +436,9 @@ func TestABulkPinRacingAVariableGroupsDeleteDoesNotDeadlock(t *testing.T) {
 		a, b := enroll(t, s, c, "a", Now), enroll(t, s, c, "b", Now)
 		for _, atCollector := range []bool{true, false} {
 			vg := newVariableGroup(t, s, OrgA, fmt.Sprintf("vg-%v", atCollector))
-			hold := []any{`select 1 from telflo_opamp.organizations where id = $1 for update`, OrgA}
+			hold := []any{`select 1 from opamp_server.organizations where id = $1 for update`, OrgA}
 			if atCollector {
-				hold = []any{`select 1 from telflo_opamp.collector_instances
+				hold = []any{`select 1 from opamp_server.collector_instances
 					where organization_id = $1 and id = $2 for no key update`, OrgA, b.ID}
 			}
 			release := blockOn(t, s, 2, hold[0].(string), hold[1:]...)
@@ -586,7 +586,7 @@ func TestNoWriteUpgradesItsOrganizationLock(t *testing.T) {
 				return s.Collectors.RecordError(ctx, OrgA, c.Fleet.ID, got.ID, collectors.ErrorReport{Message: "m", At: Now})
 			}},
 		} {
-			release := blockOn(t, s, 1, `select 1 from telflo_opamp.organizations where id = $1 for update`, OrgA)
+			release := blockOn(t, s, 1, `select 1 from opamp_server.organizations where id = $1 for update`, OrgA)
 			done := make(chan error, 1)
 			go func() { done <- w.write() }()
 			s.WaitForLockWaiters(t, 1)
@@ -595,7 +595,7 @@ func TestNoWriteUpgradesItsOrganizationLock(t *testing.T) {
 			if err := <-done; err != nil {
 				t.Fatalf("%s: %v", w.label, err)
 			}
-			if len(waiting) != 1 || !strings.Contains(waiting[0], "telflo_opamp.organizations") || !strings.Contains(waiting[0], w.mode) {
+			if len(waiting) != 1 || !strings.Contains(waiting[0], "opamp_server.organizations") || !strings.Contains(waiting[0], w.mode) {
 				t.Fatalf("%s first waited on %q; want the organization's row %s", w.label, waiting, w.mode)
 			}
 			other := keyShare

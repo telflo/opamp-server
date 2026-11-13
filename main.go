@@ -22,10 +22,10 @@
 // Credentials, to be kept in a secret store and never in a plain config file:
 //
 //	OPAMP_DATABASE_URL                 serve: the server's own login role
-//	                                   (telflo_opamp), a member of
-//	                                   telflo_opamp_runtime; holds its
+//	                                   (telflo_opamp_server), a member of
+//	                                   telflo_opamp_server_runtime; holds its
 //	                                   password
-//	OPAMP_MIGRATION_DATABASE_URL       migrate: telflo_opamp_owner; holds its
+//	OPAMP_MIGRATION_DATABASE_URL       migrate: telflo_opamp_server_owner; holds its
 //	                                   password
 //	OPAMP_MANAGEMENT_SECRET            serve: the management API's shared
 //	                                   secret, at least 32 bytes

@@ -31,14 +31,14 @@ func TestLoadSettingsReadsEverythingServeNeeds(t *testing.T) {
 	previous := strings.Repeat("p", management.MinSecretBytes)
 	settings, err := LoadSettings(RoleAll, keyed(map[string]string{
 		management.PortVariable:            "40001",
-		DatabaseURLVariable:                "postgresql://telflo_opamp@db/telflo_opamp",
+		DatabaseURLVariable:                "postgresql://telflo_opamp_server@db/telflo_opamp_server",
 		management.SecretVariable:          current,
 		management.PreviousSecretsVariable: previous,
 	}), unsetNothing)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if settings.Management.Port != 40001 || settings.DatabaseURL != "postgresql://telflo_opamp@db/telflo_opamp" {
+	if settings.Management.Port != 40001 || settings.DatabaseURL != "postgresql://telflo_opamp_server@db/telflo_opamp_server" {
 		t.Fatalf("settings = %+v", settings)
 	}
 	if !settings.Management.Secrets.Accepts(current) || !settings.Management.Secrets.Accepts(previous) || settings.Management.Secrets.Count() != 2 {
@@ -286,7 +286,7 @@ func mintWith(t *testing.T, keys *tokens.Keyring) string {
 func TestTheShutdownDrainIsFiveSecondsByDefaultFromZeroToThirty(t *testing.T) {
 	load := func(raw string) (Settings, error) {
 		return LoadSettings(RoleAll, keyed(map[string]string{
-			DatabaseURLVariable: "postgresql://telflo_opamp@db/telflo_opamp", management.SecretVariable: strings.Repeat("c", management.MinSecretBytes),
+			DatabaseURLVariable: "postgresql://telflo_opamp_server@db/telflo_opamp_server", management.SecretVariable: strings.Repeat("c", management.MinSecretBytes),
 			ShutdownDrainVariable: raw,
 		}), unsetNothing)
 	}

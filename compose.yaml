@@ -68,7 +68,7 @@ services:
       postgres: { condition: service_healthy }
     restart: "no"
 
-  # One-shot: the embedded migrations, as telflo_opamp_owner (the
+  # One-shot: the embedded migrations, as telflo_opamp_server_owner (the
   # database's owner), then it exits. A no-op when the schema is current.
   # serve refuses a schema that isn't exactly its own, so both servers wait
   # for this. Every service on the image builds it: Compose would otherwise
@@ -78,13 +78,13 @@ services:
     image: opamp-server:dev
     command: ["migrate", "up"]
     environment:
-      OPAMP_MIGRATION_DATABASE_URL: postgresql://telflo_opamp_owner:opamp-compose-owner-development-password@postgres:5432/telflo_opamp
+      OPAMP_MIGRATION_DATABASE_URL: postgresql://telflo_opamp_server_owner:opamp-compose-owner-development-password@postgres:5432/telflo_opamp_server
     depends_on:
       bootstrap: { condition: service_completed_successfully }
     restart: "no"
 
-  # The agent endpoint (51234): `serve agent`, as telflo_opamp, a member of
-  # telflo_opamp_runtime that owns nothing.
+  # The agent endpoint (51234): `serve agent`, as telflo_opamp_server, a member of
+  # telflo_opamp_server_runtime that owns nothing.
   #
   # OPAMP_SERVER_URL is the URL each collector is handed with its rotate
   # token and polls from then on, so it must be one the collectors reach.
@@ -116,7 +116,7 @@ services:
     # it part way.
     stop_grace_period: 30s
     environment:
-      OPAMP_DATABASE_URL: postgresql://telflo_opamp:opamp-compose-runtime-development-password@postgres:5432/telflo_opamp?pool_max_conns=10
+      OPAMP_DATABASE_URL: postgresql://telflo_opamp_server:opamp-compose-runtime-development-password@postgres:5432/telflo_opamp_server?pool_max_conns=10
       OPAMP_ENCRYPTION_KEY: HJiuKzTRLDzM3hKGOw3Lj7tluHIULWUxfZUvpPxbtrQel55NA6EhyMC3HRuP1O/y
       OPAMP_ALLOW_DEVELOPMENT_SECRETS: "true"
       OPAMP_SERVER_URL: ${OPAMP_SERVER_URL:-http://agent:51234/opamp/api/v1}
@@ -141,7 +141,7 @@ services:
     command: ["serve", "management"]
     stop_grace_period: 30s
     environment:
-      OPAMP_DATABASE_URL: postgresql://telflo_opamp:opamp-compose-runtime-development-password@postgres:5432/telflo_opamp?pool_max_conns=10
+      OPAMP_DATABASE_URL: postgresql://telflo_opamp_server:opamp-compose-runtime-development-password@postgres:5432/telflo_opamp_server?pool_max_conns=10
       OPAMP_MANAGEMENT_SECRET: opamp-compose-development-management-secret-never-for-production
       OPAMP_ENCRYPTION_KEY: HJiuKzTRLDzM3hKGOw3Lj7tluHIULWUxfZUvpPxbtrQel55NA6EhyMC3HRuP1O/y
       OPAMP_ALLOW_DEVELOPMENT_SECRETS: "true"

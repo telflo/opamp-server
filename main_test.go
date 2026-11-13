@@ -48,7 +48,7 @@ import (
 )
 
 // This package's own test database.
-const testDatabase = "telflo_opamp_main_test"
+const testDatabase = "telflo_opamp_server_main_test"
 
 // testSecret is a management secret serve accepts (32 bytes or more).
 const testSecret = "main-test-secret-0123456789abcdef"
@@ -413,14 +413,14 @@ func TestServeRefusesWithoutADatabaseURL(t *testing.T) {
 
 func TestServeRefusesABadManagementPort(t *testing.T) {
 	code, log := runCommand(t, map[string]string{management.PortVariable: "51235x", serve.EncryptionKeyVariable: testEncryptionKey,
-		serve.DatabaseURLVariable: "postgresql://telflo_opamp@db.invalid/telflo_opamp"}, "serve")
+		serve.DatabaseURLVariable: "postgresql://telflo_opamp_server@db.invalid/telflo_opamp_server"}, "serve")
 	if code != 1 || !strings.Contains(log, "OPAMP_MANAGEMENT_PORT must be a port number") {
 		t.Fatalf("serve exited %d with log %s, want 1 naming OPAMP_MANAGEMENT_PORT", code, log)
 	}
 }
 
 func TestServeRefusesAURLThatDoesNotParseWithoutQuotingIt(t *testing.T) {
-	code, log := runCommand(t, serveEnv("postgresql://someone:a-secret@localhost:notaport/telflo_opamp"), "serve")
+	code, log := runCommand(t, serveEnv("postgresql://someone:a-secret@localhost:notaport/telflo_opamp_server"), "serve")
 	if code != 1 || !strings.Contains(log, "OPAMP_DATABASE_URL is not a valid PostgreSQL connection URL") {
 		t.Fatalf("serve exited %d with log %s", code, log)
 	}
@@ -475,15 +475,15 @@ func assertRefused(t *testing.T, databaseURL, want string) {
 	}
 }
 
-const roleHint = " Set OPAMP_DATABASE_URL to the server's own login role (telflo_opamp, made by " +
-	"deploy/bootstrap.sql), a member of telflo_opamp_runtime, and OPAMP_MIGRATION_DATABASE_URL to telflo_opamp_owner."
+const roleHint = " Set OPAMP_DATABASE_URL to the server's own login role (telflo_opamp_server, made by " +
+	"deploy/bootstrap.sql), a member of telflo_opamp_server_runtime, and OPAMP_MIGRATION_DATABASE_URL to telflo_opamp_server_owner."
 
 func TestServeRefusesTheOwner(t *testing.T) {
 	d := databasetest.New(t, testDatabase)
 	assertRefused(t, d.OwnerURL,
-		`Refusing to start: the database role "telflo_opamp_owner" is telflo_opamp_owner or a member of it, `+
-			`owns objects in the telflo_opamp schema, or is a member of their owner, `+
-			`doesn't inherit telflo_opamp_runtime's privileges.`+roleHint)
+		`Refusing to start: the database role "telflo_opamp_server_owner" is telflo_opamp_server_owner or a member of it, `+
+			`owns objects in the opamp_server schema, or is a member of their owner, `+
+			`doesn't inherit telflo_opamp_server_runtime's privileges.`+roleHint)
 }
 
 func TestServeRefusesASuperuser(t *testing.T) {
@@ -497,21 +497,21 @@ func TestServeRefusesARoleWithBypassRLS(t *testing.T) {
 	// Otherwise a role serve would accept: not a superuser, owning nothing,
 	// inheriting the runtime role. Only BYPASSRLS can refuse it.
 	name, roleURL := d.ThrowawayRole(t, "nosuperuser bypassrls")
-	if _, err := d.Admin.Exec(context.Background(), "grant telflo_opamp_runtime to "+name+" with inherit true"); err != nil {
+	if _, err := d.Admin.Exec(context.Background(), "grant telflo_opamp_server_runtime to "+name+" with inherit true"); err != nil {
 		t.Fatal(err)
 	}
 	assertRefused(t, roleURL, `Refusing to start: the database role "`+name+`" has BYPASSRLS.`+roleHint)
 }
 
 // serveShapedRole is a throwaway role serve would accept, as bootstrap.sql
-// shapes telflo_opamp (a member of telflo_opamp_runtime with inheritance,
-// its errors terse), plus attributes. The shared telflo_opamp is never
+// shapes telflo_opamp_server (a member of telflo_opamp_server_runtime with inheritance,
+// its errors terse), plus attributes. The shared telflo_opamp_server is never
 // altered: other packages' tests use it at the same time.
 func serveShapedRole(t *testing.T, d *databasetest.Databases, attributes string) (name, roleURL string) {
 	t.Helper()
 	name, roleURL = d.ThrowawayRole(t, "nosuperuser nobypassrls "+attributes)
 	for _, statement := range []string{
-		"grant telflo_opamp_runtime to " + name + " with inherit true",
+		"grant telflo_opamp_server_runtime to " + name + " with inherit true",
 		"alter role " + name + " set log_error_verbosity = 'terse'",
 	} {
 		if _, err := d.Admin.Exec(context.Background(), statement); err != nil {
@@ -649,7 +649,7 @@ func TestServeRefusesASchemaAheadOfThisBuild(t *testing.T) {
 	latest := latestMigration(t)
 	// A migration from a newer release, as goose records one.
 	if _, err := d.Owner.Exec(context.Background(),
-		"insert into telflo_opamp.goose_db_version (version_id, is_applied) values ($1, true)", latest+1); err != nil {
+		"insert into opamp_server.goose_db_version (version_id, is_applied) values ($1, true)", latest+1); err != nil {
 		t.Fatal(err)
 	}
 	assertRefused(t, d.RuntimeURL, fmt.Sprintf(
@@ -783,11 +783,11 @@ func TestMigrateAsTheServerRoleIsRefusedNamingTheOwner(t *testing.T) {
 	d := databasetest.New(t, testDatabase, databasetest.Unmigrated())
 	code, log := runCommand(t, map[string]string{migrationDatabaseURLVariable: d.RuntimeURL}, "migrate", "up")
 	if code != 1 {
-		t.Fatalf("migrate up as telflo_opamp exited %d, want 1: %s", code, log)
+		t.Fatalf("migrate up as telflo_opamp_server exited %d, want 1: %s", code, log)
 	}
 	for _, want := range []string{
-		`refusing to migrate: the role \"telflo_opamp\" doesn't own the database`,
-		"OPAMP_MIGRATION_DATABASE_URL", "telflo_opamp_owner",
+		`refusing to migrate: the role \"telflo_opamp_server\" doesn't own the database`,
+		"OPAMP_MIGRATION_DATABASE_URL", "telflo_opamp_server_owner",
 	} {
 		if !strings.Contains(log, want) {
 			t.Errorf("the log lacks %q: %s", want, log)
@@ -822,7 +822,7 @@ func TestMigrateDownWithoutYesDropDataLeavesTheSchema(t *testing.T) {
 	}
 	var exists bool
 	if err := d.Owner.QueryRow(context.Background(),
-		"select to_regclass('telflo_opamp.publications') is not null").Scan(&exists); err != nil || !exists {
+		"select to_regclass('opamp_server.publications') is not null").Scan(&exists); err != nil || !exists {
 		t.Fatalf("after a refused down, the table exists = %v, %v; want true", exists, err)
 	}
 }
@@ -836,7 +836,7 @@ func TestMigrateRefusesWithoutItsURL(t *testing.T) {
 
 // unreachableURL parses but names a closed port, so a serve that gets past
 // its settings fails at the database instead.
-const unreachableURL = "postgresql://nobody:not-a-real-password@127.0.0.1:1/telflo_opamp"
+const unreachableURL = "postgresql://nobody:not-a-real-password@127.0.0.1:1/telflo_opamp_server"
 
 func TestServeRefusesAMissingOrShortSecret(t *testing.T) {
 	short := strings.Repeat("s", management.MinSecretBytes-1)
@@ -1225,7 +1225,7 @@ func TestServeRefusesTLSSettingsItCannotUse(t *testing.T) {
 	}
 }
 
-// serve with TLS on, bound to 127.0.0.1, as telflo_opamp on a real
+// serve with TLS on, bound to 127.0.0.1, as telflo_opamp_server on a real
 // database: a client trusting the certificate gets /health and the API
 // (401 without the secret), and `healthcheck`, with the same settings, asks
 // it over https and exits 0.

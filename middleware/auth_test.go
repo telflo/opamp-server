@@ -23,7 +23,7 @@ import (
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests").
-const testDatabase = "telflo_opamp_middleware_test"
+const testDatabase = "telflo_opamp_server_middleware_test"
 
 var ctx = context.Background()
 

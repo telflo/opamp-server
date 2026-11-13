@@ -45,18 +45,18 @@ docker exec -i -e OPAMP_OWNER_PASSWORD -e OPAMP_RUNTIME_PASSWORD <container> \
 unset OPAMP_OWNER_PASSWORD OPAMP_RUNTIME_PASSWORD
 ```
 
-The database is `telflo_opamp` unless you pass `-v database=<name>`. The
+The database is `telflo_opamp_server` unless you pass `-v database=<name>`. The
 script stops before changing anything if either password is missing or
 empty. It creates, each only if missing:
 
 | Role | What it's for |
 |---|---|
-| `telflo_opamp_owner` | Logs in. Owns the database, the schema and every table. `migrate` runs as it. |
-| `telflo_opamp_runtime` | Can't log in. Holds exactly the privileges the server needs, which the migrations grant it. |
-| `telflo_opamp` | Logs in. `serve` runs as it. A member of `telflo_opamp_runtime`, and can't create or change tables. |
+| `telflo_opamp_server_owner` | Logs in. Owns the database, the schema and every table. `migrate` runs as it. |
+| `telflo_opamp_server_runtime` | Can't log in. Holds exactly the privileges the server needs, which the migrations grant it. |
+| `telflo_opamp_server` | Logs in. `serve` runs as it. A member of `telflo_opamp_server_runtime`, and can't create or change tables. |
 
-and the database, owned by `telflo_opamp_owner`, in UTF8. Only the two
-login roles can connect to it. `telflo_opamp`'s `log_error_verbosity` is
+and the database, owned by `telflo_opamp_server_owner`, in UTF8. Only the two
+login roles can connect to it. `telflo_opamp_server`'s `log_error_verbosity` is
 `terse`, so PostgreSQL's own log doesn't quote the values in the server's
 failed writes. `serve` refuses to start if the database isn't UTF8, if
 `PUBLIC` can connect to it or make temporary tables in it, or if its
@@ -74,42 +74,42 @@ them to its log, and so does any server when such a statement fails.
 A cloud provider's admin role isn't a superuser, so it can't run the
 bootstrap. It stops part way, and the statement it stops at **writes the
 runtime role's password to the server's log**. If you already tried, set a
-new password for `telflo_opamp`.
+new password for `telflo_opamp_server`.
 
 Instead, as the admin role or with the provider's tools, follow the
 bootstrap's statements as a checklist:
 
 1. Create the three roles as the table above describes. Set each password
    the provider's way, never with a statement that might fail.
-   `telflo_opamp` must not have `CREATEDB` or `CREATEROLE` (by default it
-   doesn't); `alter role telflo_opamp nocreatedb nocreaterole` removes
+   `telflo_opamp_server` must not have `CREATEDB` or `CREATEROLE` (by default it
+   doesn't); `alter role telflo_opamp_server nocreatedb nocreaterole` removes
    them.
-2. Let the admin role act as the owner, `grant telflo_opamp_owner to
+2. Let the admin role act as the owner, `grant telflo_opamp_server_owner to
    <admin> with set true`, then create the database `owner
-   telflo_opamp_owner`.
+   telflo_opamp_server_owner`.
 3. As the database's owner, run `revoke connect, temporary on database
-   telflo_opamp from public`, then `grant connect on database telflo_opamp
-   to telflo_opamp_owner, telflo_opamp`.
+   telflo_opamp_server from public`, then `grant connect on database telflo_opamp_server
+   to telflo_opamp_server_owner, telflo_opamp_server`.
 4. Make the server's errors terse. Only a superuser may set
    `log_error_verbosity`, so either:
    - set `log_error_verbosity = terse` server-wide in the provider's
      parameter group (or its equivalent); or
    - have the provider's superuser, where there is one, run `grant set on
      parameter log_error_verbosity to <admin>`, then as the admin run
-     `alter role telflo_opamp set log_error_verbosity = terse`.
+     `alter role telflo_opamp_server set log_error_verbosity = terse`.
 
    Never grant `set` on it to the server's own role: it could set its
    errors back to verbose.
 
 `serve` checks the result before it listens, and names the setting and the
 statement that fixes it. It doesn't check `search_path`, so check that
-yourself: connected to `telflo_opamp` as `telflo_opamp`, `select
-current_setting('search_path')` must answer `telflo_opamp`.
+yourself: connected to `telflo_opamp_server` as `telflo_opamp_server`, `select
+current_setting('search_path')` must answer `opamp_server`.
 
 ## 2. Migrate
 
 ```sh
-OPAMP_MIGRATION_DATABASE_URL=postgresql://telflo_opamp_owner:<password>@db.internal:5432/telflo_opamp \
+OPAMP_MIGRATION_DATABASE_URL=postgresql://telflo_opamp_server_owner:<password>@db.internal:5432/telflo_opamp_server \
   opamp-server migrate up      # or: status; or, in development: down --yes-drop-data
 ```
 
@@ -128,5 +128,5 @@ upgrade.
 `migrate` runs **only as the database's owner** itself, not a member of it
 or a superuser: whoever runs a migration owns what it creates, and every
 later migration must be able to change it. It refuses any other role, and
-a server where `telflo_opamp_runtime` doesn't exist (run the bootstrap
+a server where `telflo_opamp_server_runtime` doesn't exist (run the bootstrap
 first).

@@ -14,9 +14,9 @@ import (
 	"github.com/telflo/opamp-server/telemetry"
 )
 
-// Postgres is the Store `serve` uses, on telflo_opamp.fleets (and, for
+// Postgres is the Store `serve` uses, on opamp_server.fleets (and, for
 // Create, collector_groups, enrollment_tokens and enrollment_token_events),
-// as telflo_opamp with its grants. Every statement names the schema, and
+// as telflo_opamp_server with its grants. Every statement names the schema, and
 // every query filters on organization_id first.
 //
 // Errors are wrapped with the operation's name only: no SQL argument (no
@@ -96,7 +96,7 @@ func (s *Postgres) Create(ctx context.Context, f NewFleet) (result CreateResult,
 	inserted := false
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-			insert into telflo_opamp.fleets (`+columns+`)
+			insert into opamp_server.fleets (`+columns+`)
 			values ($1, $2, $3, $4, 'active', $5, $6, $7, $7)
 			on conflict do nothing
 			returning `+columns,
@@ -111,7 +111,7 @@ func (s *Postgres) Create(ctx context.Context, f NewFleet) (result CreateResult,
 		inserted, c.Fleet = true, fleets[0]
 
 		if _, err := tx.Exec(ctx, `
-			insert into telflo_opamp.collector_groups
+			insert into opamp_server.collector_groups
 				(id, organization_id, fleet_id, name, is_default,
 				 assigned_publication_id, annotations, created_at, updated_at)
 			values ($1, $2, $3, $4, true, null, null, $5, $5)`,
@@ -119,7 +119,7 @@ func (s *Postgres) Create(ctx context.Context, f NewFleet) (result CreateResult,
 			return err
 		}
 		if _, err := tx.Exec(ctx, `
-			insert into telflo_opamp.enrollment_tokens
+			insert into opamp_server.enrollment_tokens
 				(id, organization_id, fleet_id, kind, expires_at, revoked_at,
 				 do_refresh, created_by_id, created_by_email, created_at)
 			values ($1, $3, $4, 'default', null, null, false, $6, $7, $8),
@@ -129,7 +129,7 @@ func (s *Postgres) Create(ctx context.Context, f NewFleet) (result CreateResult,
 			return err
 		}
 		_, err = tx.Exec(ctx, `
-			insert into telflo_opamp.enrollment_token_events
+			insert into opamp_server.enrollment_token_events
 				(id, organization_id, fleet_id, enrollment_token_id, event,
 				 actor_id, actor_email, occurred_at)
 			values ($1, $3, $4, $5, 'issued', $7, $8, $9),
@@ -160,7 +160,7 @@ func (s *Postgres) Create(ctx context.Context, f NewFleet) (result CreateResult,
 	var labelTaken bool
 	if err := s.pool.QueryRow(ctx, `
 		select exists (
-			select 1 from telflo_opamp.fleets
+			select 1 from opamp_server.fleets
 			 where organization_id = $1 and label = $2)`,
 		f.OrganizationID, f.Label).Scan(&labelTaken); err != nil {
 		return 0, Creation{}, fmt.Errorf("fleets: create: %w", err)
@@ -183,7 +183,7 @@ func (s *Postgres) List(ctx context.Context, organizationID uuid.UUID, o ListOpt
 
 	query := `
 		select ` + columns + `
-		  from telflo_opamp.fleets
+		  from opamp_server.fleets
 		 where organization_id = $1`
 	// One row more than the page, to know whether another page follows.
 	args := []any{organizationID, o.Limit + 1}
@@ -230,7 +230,7 @@ func (s *Postgres) Get(ctx context.Context, organizationID, id uuid.UUID) (f Fle
 func (s *Postgres) get(ctx context.Context, organizationID, id uuid.UUID) (Fleet, error) {
 	rows, err := s.pool.Query(ctx, `
 		select `+columns+`
-		  from telflo_opamp.fleets
+		  from opamp_server.fleets
 		 where organization_id = $1 and id = $2`,
 		organizationID, id)
 	if err != nil {
@@ -263,7 +263,7 @@ func (s *Postgres) Update(ctx context.Context, organizationID, id uuid.UUID, cha
 		status = &v
 	}
 	rows, err := s.pool.Query(ctx, `
-		update telflo_opamp.fleets
+		update opamp_server.fleets
 		   set label = coalesce($3, label),
 		       status = coalesce($4, status),
 		       updated_at = case
@@ -273,7 +273,7 @@ func (s *Postgres) Update(ctx context.Context, organizationID, id uuid.UUID, cha
 		 where organization_id = $1 and id = $2
 		   and ($3::text is null or not exists (
 		         select 1
-		           from telflo_opamp.fleets x
+		           from opamp_server.fleets x
 		          where x.organization_id = $1 and x.label = $3::text and x.id <> $2))
 		returning `+columns,
 		organizationID, id, changes.Label, status, at(now))
@@ -333,7 +333,7 @@ func (s *Postgres) delete(ctx context.Context, organizationID, id uuid.UUID) (de
 		}
 		err := tx.QueryRow(ctx, `
 			select 1
-			  from telflo_opamp.fleets
+			  from opamp_server.fleets
 			 where organization_id = $1 and id = $2
 			   for update`,
 			organizationID, id).Scan(new(int))
@@ -345,7 +345,7 @@ func (s *Postgres) delete(ctx context.Context, organizationID, id uuid.UUID) (de
 		}
 		if _, err := tx.Exec(ctx, `
 			select 1
-			  from telflo_opamp.collector_instances
+			  from opamp_server.collector_instances
 			 where organization_id = $1 and fleet_id = $2
 			 order by id
 			   for update`,
@@ -353,7 +353,7 @@ func (s *Postgres) delete(ctx context.Context, organizationID, id uuid.UUID) (de
 			return err
 		}
 		tag, err := tx.Exec(ctx, `
-			delete from telflo_opamp.fleets
+			delete from opamp_server.fleets
 			 where organization_id = $1 and id = $2`,
 			organizationID, id)
 		deleted = tag.RowsAffected() == 1
@@ -377,7 +377,7 @@ func isDeadlock(err error) bool {
 func lockOrganization(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID) (bool, error) {
 	err := tx.QueryRow(ctx, `
 		select 1
-		  from telflo_opamp.organizations
+		  from opamp_server.organizations
 		 where id = $1
 		   for key share`,
 		organizationID).Scan(new(int))
@@ -396,7 +396,7 @@ func (s *Postgres) TypeAndStatus(ctx context.Context, organizationID, id uuid.UU
 	defer func() { end(answerOrFailure(err)) }()
 	err = s.pool.QueryRow(ctx, `
 		select type, status
-		  from telflo_opamp.fleets
+		  from opamp_server.fleets
 		 where organization_id = $1 and id = $2`,
 		organizationID, id).Scan(&t, &st)
 	switch {

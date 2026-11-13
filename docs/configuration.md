@@ -13,7 +13,7 @@ Run separately, each scales and restarts on its own, and the agent endpoint
 never holds the management secret. Both must run the same release.
 
 ```sh
-OPAMP_DATABASE_URL=postgresql://telflo_opamp:<password>@db.internal:5432/telflo_opamp?pool_max_conns=10 \
+OPAMP_DATABASE_URL=postgresql://telflo_opamp_server:<password>@db.internal:5432/telflo_opamp_server?pool_max_conns=10 \
 OPAMP_MANAGEMENT_SECRET=<at least 32 bytes> \
 OPAMP_ENCRYPTION_KEY_FILE=/run/secrets/opamp-encryption-key \
 OPAMP_SERVER_URL=https://opamp.example.com/opamp/api/v1 \
@@ -36,12 +36,12 @@ its Secrets and values. Generate the secret and the key with
 
 ### `OPAMP_DATABASE_URL`
 
-The database, as the server's own role, `telflo_opamp`, which reads and
+The database, as the server's own role, `telflo_opamp_server`, which reads and
 writes rows but can't change tables. `serve` refuses to start as the
 owner or a superuser.
 
 ```sh
-OPAMP_DATABASE_URL='postgresql://telflo_opamp:<password>@db.internal:5432/telflo_opamp?pool_max_conns=10'
+OPAMP_DATABASE_URL='postgresql://telflo_opamp_server:<password>@db.internal:5432/telflo_opamp_server?pool_max_conns=10'
 ```
 
 - Set `pool_max_conns`; see [The connection pool](#the-connection-pool).
@@ -51,11 +51,11 @@ OPAMP_DATABASE_URL='postgresql://telflo_opamp:<password>@db.internal:5432/telflo
 
 ### `OPAMP_MIGRATION_DATABASE_URL`
 
-The same database, as its owner, `telflo_opamp_owner`. Only `migrate up`
+The same database, as its owner, `telflo_opamp_server_owner`. Only `migrate up`
 uses it, and it refuses any other role.
 
 ```sh
-OPAMP_MIGRATION_DATABASE_URL='postgresql://telflo_opamp_owner:<password>@db.internal:5432/telflo_opamp'
+OPAMP_MIGRATION_DATABASE_URL='postgresql://telflo_opamp_server_owner:<password>@db.internal:5432/telflo_opamp_server'
 ```
 
 ### `OPAMP_MANAGEMENT_SECRET`
@@ -151,7 +151,7 @@ a value) and exits 1. It refuses, among others:
 - `compose.yaml`'s development management secret or encryption key, which
   everyone holds, unless `OPAMP_ALLOW_DEVELOPMENT_SECRETS` is `true`;
 - a database role that could do more than its grants allow, such as a
-  superuser or the owner, or one without `telflo_opamp_runtime`'s rights
+  superuser or the owner, or one without `telflo_opamp_server_runtime`'s rights
   ([database.md](database.md) says how to set the role up);
 - a schema behind this build ("run `opamp-server migrate up`") or ahead of
   it ("run the opamp-server release that migrated it").

@@ -21,7 +21,7 @@ you would the database's superuser password:
 ### What a compromised agent pod still has: the database
 
 The agent endpoint and the management API log in as the same role,
-`telflo_opamp`, and that role holds every right the management API needs.
+`telflo_opamp_server`, and that role holds every right the management API needs.
 So code running in an agent pod could change the database directly,
 without the API: add an API key for every organization, publish a
 configuration, or assign one to any group. The pod also holds the

@@ -246,7 +246,7 @@ security.**
   beside the published versions, and the first collector's configuration
   pushed onto every other is what the earlier codebase did. Importing
   again, with rules of its own, is a decision of its own.
-- **Row-level security in `telflo_opamp`.** The policy itself is cheap,
+- **Row-level security in `opamp_server`.** The policy itself is cheap,
   but every path (jobs, tests, pooled connections) would set the
   organization first on every transaction. Composite keys make a
   cross-organization link unstorable, which a policy alone wouldn't;

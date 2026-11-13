@@ -28,7 +28,7 @@ import (
 
 // This package's own test database (CONTRIBUTING.md, "Tests"). Every test
 // that calls databasetest.New gets it dropped and made again.
-const testDatabase = "telflo_opamp_database_test"
+const testDatabase = "telflo_opamp_server_database_test"
 
 func TestLatestMigrationIsTheNewestEmbeddedFile(t *testing.T) {
 	latest, err := database.LatestMigration()
@@ -140,7 +140,7 @@ func TestMigrateUpFromAnEmptyDatabaseThenDownAndUpAgain(t *testing.T) {
 	if err := d.Admin.QueryRow(ctx, `
 		select pg_get_userbyid(n.nspowner), pg_get_userbyid(c.relowner)
 		  from pg_namespace n join pg_class c on c.relnamespace = n.oid
-		 where n.nspname = 'telflo_opamp' and c.relname = 'goose_db_version'`,
+		 where n.nspname = 'opamp_server' and c.relname = 'goose_db_version'`,
 	).Scan(&schemaOwner, &versionTableOwner); err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestMigrateUpFromAnEmptyDatabaseThenDownAndUpAgain(t *testing.T) {
 	var notOwned []string
 	rows, err := d.Admin.Query(ctx, `
 		select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
-		 where n.nspname = 'telflo_opamp' and pg_get_userbyid(c.relowner) <> $1
+		 where n.nspname = 'opamp_server' and pg_get_userbyid(c.relowner) <> $1
 		 order by 1`, database.OwnerRole)
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +229,7 @@ func TestMigration2RegistersTheOrganizationsOfExistingPublications(t *testing.T)
 		{orgY, "2026-10-02T11:00:00.000Z"},
 	} {
 		if _, err := d.Owner.Exec(ctx, `
-			insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+			insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
 			  version_id, version_number, version_label, yaml, sha256, published_by_id, published_by_email,
 			  published_at, received_at)
 			values (gen_random_uuid(), $1, gen_random_uuid(), 'payments-gateway', gen_random_uuid(), 1, null,
@@ -307,14 +307,14 @@ func TestMigration3GivesExistingPublicationsTheContribCollector(t *testing.T) {
 	// Two publications, as a release before 00003 stored them.
 	const orgX = "0a0a0a0a-0000-4000-8000-00000000000a"
 	if _, err := d.Owner.Exec(ctx, `
-		insert into telflo_opamp.organizations (id, name, created_at, updated_at)
+		insert into opamp_server.organizations (id, name, created_at, updated_at)
 		values ($1, 'an organization', '2026-10-01T10:00:00Z', '2026-10-01T10:00:00Z')`, orgX); err != nil {
 		t.Fatal(err)
 	}
 	// previousRelease is the insert a server of the previous release makes:
 	// every column 00001 made, and not the collector's.
 	const previousRelease = `
-		insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+		insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
 		  version_id, version_number, version_label, yaml, sha256, published_by_id, published_by_email,
 		  published_at, received_at)
 		values ($1, $2, gen_random_uuid(), 'payments-gateway', gen_random_uuid(), 1, null,
@@ -353,7 +353,7 @@ func TestMigration3GivesExistingPublicationsTheContribCollector(t *testing.T) {
 		// This release's store writes both, and they are kept as written.
 		written := "1d1d1d1d-0000-4000-8000-00000000001d"
 		if _, err := d.Runtime.Exec(ctx, `
-			insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+			insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
 			  version_id, version_number, version_label, yaml, sha256, published_by_id, published_by_email,
 			  published_at, received_at, collector_distribution, collector_version)
 			values ($1, $2, gen_random_uuid(), 'payments-gateway', gen_random_uuid(), 1, null,
@@ -382,7 +382,7 @@ func TestMigration3GivesExistingPublicationsTheContribCollector(t *testing.T) {
 			{"otelcol-contrib", strings.Repeat("1", 61) + ".2.3"},
 		} {
 			_, err := d.Runtime.Exec(ctx, `
-				insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+				insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
 				  version_id, version_number, version_label, yaml, sha256, published_by_id, published_by_email,
 				  published_at, received_at, collector_distribution, collector_version)
 				values (gen_random_uuid(), $1, gen_random_uuid(), 'payments-gateway', gen_random_uuid(), 1, null,
@@ -398,7 +398,7 @@ func TestMigration3GivesExistingPublicationsTheContribCollector(t *testing.T) {
 			{"otelcol", "10.20.30"},
 		} {
 			if _, err := d.Runtime.Exec(ctx, `
-				insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+				insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
 				  version_id, version_number, version_label, yaml, sha256, published_by_id, published_by_email,
 				  published_at, received_at, collector_distribution, collector_version)
 				values (gen_random_uuid(), $1, gen_random_uuid(), 'payments-gateway', gen_random_uuid(), 1, null,
@@ -419,7 +419,7 @@ func TestMigration3GivesExistingPublicationsTheContribCollector(t *testing.T) {
 		}
 
 		// The rows this round added go, so down can be compared with before.
-		if _, err := d.Owner.Exec(ctx, `delete from telflo_opamp.publications where not (id = any ($1))`, existing); err != nil {
+		if _, err := d.Owner.Exec(ctx, `delete from opamp_server.publications where not (id = any ($1))`, existing); err != nil {
 			t.Fatal(err)
 		}
 		result, err := migrator.Down(ctx)
@@ -460,14 +460,14 @@ func TestMigration4DropsThePublicationCollectorsDefaults(t *testing.T) {
 
 	orgX := uuid.MustParse("0a0a0a0a-0000-4000-8000-00000000000a")
 	if _, err := d.Owner.Exec(ctx, `
-		insert into telflo_opamp.organizations (id, name, created_at, updated_at)
+		insert into opamp_server.organizations (id, name, created_at, updated_at)
 		values ($1, 'an organization', '2026-10-01T10:00:00Z', '2026-10-01T10:00:00Z')`, orgX); err != nil {
 		t.Fatal(err)
 	}
 	// withoutCollector is the insert of a release from before 00003: no
 	// collector. $1 is the publication's id, $2 its organization's.
 	const withoutCollector = `
-		insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+		insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
 		  version_id, version_number, version_label, yaml, sha256, published_by_id, published_by_email,
 		  published_at, received_at)
 		values ($1, $2, gen_random_uuid(), 'payments-gateway', gen_random_uuid(), 1, null,
@@ -482,7 +482,7 @@ func TestMigration4DropsThePublicationCollectorsDefaults(t *testing.T) {
 	// references (migration 00012), so it needs today's schema; no previous
 	// release runs. $1 is the publication's id, $2 its organization's.
 	const withCollector = `
-		insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+		insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
 		  version_id, version_number, version_label, yaml, sha256, published_by_id, published_by_email,
 		  published_at, received_at, collector_distribution, collector_version)
 		values ($1, $2, gen_random_uuid(), 'payments-gateway', gen_random_uuid(), 2, null,
@@ -529,7 +529,7 @@ func TestMigration4DropsThePublicationCollectorsDefaults(t *testing.T) {
 				t.Fatalf("round %d: no comment %q among %s", round, want, comments)
 			}
 		}
-		if _, err := d.Owner.Exec(ctx, `delete from telflo_opamp.publications where id = $1`, stored); err != nil {
+		if _, err := d.Owner.Exec(ctx, `delete from opamp_server.publications where id = $1`, stored); err != nil {
 			t.Fatal(err)
 		}
 
@@ -593,7 +593,7 @@ func TestMigration12AddsOnlyAndRollsBack(t *testing.T) {
 		if columns == nil {
 			columns = []string{}
 		}
-		rows, err := d.Admin.Query(ctx, "select (to_jsonb(r) - $1::text[])::text from telflo_opamp."+
+		rows, err := d.Admin.Query(ctx, "select (to_jsonb(r) - $1::text[])::text from opamp_server."+
 			pgx.Identifier{table}.Sanitize()+" r order by 1", columns)
 		if err != nil {
 			t.Fatal(err)
@@ -619,15 +619,15 @@ func TestMigration12AddsOnlyAndRollsBack(t *testing.T) {
 		}
 		return n
 	}
-	// what00012Made counts the objects in telflo_opamp whose name says
+	// what00012Made counts the objects in opamp_server whose name says
 	// variable: tables, columns, constraints and indexes.
 	const what00012Made = `
 		select (select count(*) from pg_class
-		         where relnamespace = 'telflo_opamp'::regnamespace and relname like '%variable%')
+		         where relnamespace = 'opamp_server'::regnamespace and relname like '%variable%')
 		     + (select count(*) from pg_constraint
-		         where connamespace = 'telflo_opamp'::regnamespace and conname like '%variable%')
+		         where connamespace = 'opamp_server'::regnamespace and conname like '%variable%')
 		     + (select count(*) from pg_attribute a join pg_class c on c.oid = a.attrelid
-		         where c.relnamespace = 'telflo_opamp'::regnamespace and a.attname like '%variable%'
+		         where c.relnamespace = 'opamp_server'::regnamespace and a.attname like '%variable%'
 		           and a.attnum > 0 and not a.attisdropped)`
 
 	for round := 1; round <= 2; round++ {
@@ -654,17 +654,17 @@ func TestMigration12AddsOnlyAndRollsBack(t *testing.T) {
 			}
 		}
 		for query, want := range map[string]int{
-			"select count(*) from telflo_opamp.organizations where variables_revision = 0":  2,
-			"select count(*) from telflo_opamp.organizations where variables_revision <> 0": 0,
+			"select count(*) from opamp_server.organizations where variables_revision = 0":  2,
+			"select count(*) from opamp_server.organizations where variables_revision <> 0": 0,
 			// Each existing organization a generation of its own, and the
 			// column left without a default.
-			"select count(distinct generation) from telflo_opamp.organizations": 2,
+			"select count(distinct generation) from opamp_server.organizations": 2,
 			`select count(*) from information_schema.columns
-			  where table_schema = 'telflo_opamp' and table_name = 'organizations'
+			  where table_schema = 'opamp_server' and table_name = 'organizations'
 			    and column_name = 'generation' and (column_default is not null or is_nullable = 'YES')`: 0,
-			`select count(*) from telflo_opamp.collector_groups
+			`select count(*) from opamp_server.collector_groups
 			  where variable_group_id is not null or variable_group_stamp is not null`: 0,
-			`select count(*) from telflo_opamp.collector_instances
+			`select count(*) from opamp_server.collector_instances
 			  where pinned_variable_group_id is not null or pinned_variable_group_stamp is not null
 			     or served_variables_stamp is not null`: 0,
 		} {
@@ -675,7 +675,7 @@ func TestMigration12AddsOnlyAndRollsBack(t *testing.T) {
 		// The store's insert names the counter, so it still registers: with
 		// the column's default dropped, an insert that left the counter out
 		// would be refused (23502). The default is put back before Down.
-		if _, err := d.Admin.Exec(ctx, `alter table telflo_opamp.organizations
+		if _, err := d.Admin.Exec(ctx, `alter table opamp_server.organizations
 			alter column variables_revision drop default`); err != nil {
 			t.Fatal(err)
 		}
@@ -687,7 +687,7 @@ func TestMigration12AddsOnlyAndRollsBack(t *testing.T) {
 		}
 		var revision int64
 		var generation *uuid.UUID
-		if err := d.Admin.QueryRow(ctx, `select variables_revision, generation from telflo_opamp.organizations where id = $1`,
+		if err := d.Admin.QueryRow(ctx, `select variables_revision, generation from opamp_server.organizations where id = $1`,
 			registered.ID).Scan(&revision, &generation); err != nil || revision != 0 || generation == nil || *generation == uuid.Nil {
 			t.Fatalf("round %d: the registered organization's counter = %d, generation %v, %v; want 0 and a generation",
 				round, revision, generation, err)
@@ -695,7 +695,7 @@ func TestMigration12AddsOnlyAndRollsBack(t *testing.T) {
 		if deleted, err := store.Delete(ctx, registered.ID); err != nil || !deleted {
 			t.Fatalf("round %d: the store's Delete = %v, %v", round, deleted, err)
 		}
-		if _, err := d.Admin.Exec(ctx, `alter table telflo_opamp.organizations
+		if _, err := d.Admin.Exec(ctx, `alter table opamp_server.organizations
 			alter column variables_revision set default 0`); err != nil {
 			t.Fatal(err)
 		}
@@ -728,7 +728,7 @@ func collectorDefaults(t *testing.T, pool *pgxpool.Pool) []string {
 		select a.attname || ': ' || coalesce(pg_get_expr(d.adbin, d.adrelid), 'none')
 		  from pg_attribute a
 		  left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
-		 where a.attrelid = 'telflo_opamp.publications'::regclass
+		 where a.attrelid = 'opamp_server.publications'::regclass
 		   and a.attname in ('collector_distribution', 'collector_version')
 		 order by a.attname`)
 	if err != nil {
@@ -747,7 +747,7 @@ func collectorsOf(t *testing.T, pool *pgxpool.Pool, ids ...string) []string {
 	t.Helper()
 	rows, err := pool.Query(context.Background(), `
 		select id::text || ' ' || collector_distribution || ' ' || collector_version
-		  from telflo_opamp.publications
+		  from opamp_server.publications
 		 where id = any ($1::uuid[])
 		 order by array_position($1::uuid[], id)`, ids)
 	if err != nil {
@@ -760,11 +760,11 @@ func collectorsOf(t *testing.T, pool *pgxpool.Pool, ids ...string) []string {
 	return got
 }
 
-// tableRows lists every row of a telflo_opamp table as text, in order.
+// tableRows lists every row of a opamp_server table as text, in order.
 func tableRows(t *testing.T, pool *pgxpool.Pool, table string) []string {
 	t.Helper()
 	rows, err := pool.Query(context.Background(),
-		"select r::text from telflo_opamp."+pgx.Identifier{table}.Sanitize()+" r order by r::text")
+		"select r::text from opamp_server."+pgx.Identifier{table}.Sanitize()+" r order by r::text")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -782,7 +782,7 @@ func organizationRows(t *testing.T, pool *pgxpool.Pool) []string {
 		select id::text || ' named ' || name
 		       || ', created ' || to_char(created_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS.MS')
 		       || ', updated ' || to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS.MS')
-		  from telflo_opamp.organizations
+		  from opamp_server.organizations
 		 order by id`)
 	if err != nil {
 		t.Fatal(err)
@@ -804,7 +804,7 @@ func publicationsComments(t *testing.T, pool *pgxpool.Pool) []string {
 		  join pg_class c on c.oid = d.objoid and d.classoid = 'pg_class'::regclass
 		  join pg_namespace n on n.oid = c.relnamespace
 		  left join pg_attribute a on a.attrelid = c.oid and a.attnum = d.objsubid and d.objsubid > 0
-		 where n.nspname = 'telflo_opamp' and c.relname = 'publications'
+		 where n.nspname = 'opamp_server' and c.relname = 'publications'
 		 order by d.objsubid`)
 	if err != nil {
 		t.Fatal(err)
@@ -822,7 +822,7 @@ func publicationsComments(t *testing.T, pool *pgxpool.Pool) []string {
 func TestMigrateRefusesAServerWithoutTheRuntimeRoleNamingBootstrap(t *testing.T) {
 	d := databasetest.New(t, testDatabase, databasetest.Unmigrated())
 	ctx := context.Background()
-	missing := "telflo_opamp_runtime_missing_from_this_server"
+	missing := "telflo_opamp_server_runtime_missing_from_this_server"
 
 	migrator, err := database.OpenMigratorRequiring(ctx, d.OwnerURL, missing)
 	if err == nil {
@@ -837,11 +837,11 @@ func TestMigrateRefusesAServerWithoutTheRuntimeRoleNamingBootstrap(t *testing.T)
 	// It refused before creating anything.
 	var schemas int
 	if err := d.Admin.QueryRow(ctx,
-		"select count(*) from pg_namespace where nspname = 'telflo_opamp'").Scan(&schemas); err != nil {
+		"select count(*) from pg_namespace where nspname = 'opamp_server'").Scan(&schemas); err != nil {
 		t.Fatal(err)
 	}
 	if schemas != 0 {
-		t.Fatal("the refused migrate created the telflo_opamp schema")
+		t.Fatal("the refused migrate created the opamp_server schema")
 	}
 }
 
@@ -854,14 +854,14 @@ func TestMigrateRefusesARoleThatDoesNotOwnTheDatabase(t *testing.T) {
 	ctx := context.Background()
 	superuser, superuserURL := d.ThrowawayRole(t, "superuser")
 	member, memberURL := d.ThrowawayRole(t, "nosuperuser")
-	if _, err := d.Admin.Exec(ctx, "grant telflo_opamp_owner to "+member); err != nil {
+	if _, err := d.Admin.Exec(ctx, "grant telflo_opamp_server_owner to "+member); err != nil {
 		t.Fatal(err)
 	}
 	// Should a refusal fail, the schema that role made must go before the
 	// roles do (cleanups run last first), or a role owning it can't be
 	// dropped and outlives the test on the shared server.
 	t.Cleanup(func() {
-		if _, err := d.Admin.Exec(context.Background(), "drop schema if exists telflo_opamp cascade"); err != nil {
+		if _, err := d.Admin.Exec(context.Background(), "drop schema if exists opamp_server cascade"); err != nil {
 			t.Errorf("dropping the schema: %v", err)
 		}
 	})
@@ -877,7 +877,7 @@ func TestMigrateRefusesARoleThatDoesNotOwnTheDatabase(t *testing.T) {
 			t.Fatalf("OpenMigrator as %s succeeded", c.role)
 		}
 		want := `refusing to migrate: the role "` + c.role + `" doesn't own the database "` + testDatabase +
-			`" ("telflo_opamp_owner" does). Migrations run as the database's owner, telflo_opamp_owner, ` +
+			`" ("telflo_opamp_server_owner" does). Migrations run as the database's owner, telflo_opamp_server_owner, ` +
 			`which deploy/bootstrap.sql makes: set OPAMP_MIGRATION_DATABASE_URL to connect as it`
 		if err.Error() != want {
 			t.Errorf("as %s: error %q, want %q", c.role, err, want)
@@ -890,16 +890,16 @@ func TestMigrateRefusesARoleThatDoesNotOwnTheDatabase(t *testing.T) {
 
 	var schemas int
 	if err := d.Admin.QueryRow(ctx,
-		"select count(*) from pg_namespace where nspname = 'telflo_opamp'").Scan(&schemas); err != nil {
+		"select count(*) from pg_namespace where nspname = 'opamp_server'").Scan(&schemas); err != nil {
 		t.Fatal(err)
 	}
 	if schemas != 0 {
-		t.Fatal("a refused migrate created the telflo_opamp schema")
+		t.Fatal("a refused migrate created the opamp_server schema")
 	}
 }
 
 func TestMigrateRefusesAURLThatDoesNotParseWithoutQuotingIt(t *testing.T) {
-	_, err := database.OpenMigrator(context.Background(), "postgresql://someone:a-secret@localhost:notaport/telflo_opamp")
+	_, err := database.OpenMigrator(context.Background(), "postgresql://someone:a-secret@localhost:notaport/telflo_opamp_server")
 	if !errors.Is(err, database.ErrInvalidURL) {
 		t.Fatalf("error = %v, want ErrInvalidURL", err)
 	}
@@ -973,18 +973,18 @@ func TestDatabaseErrorsQuoteNoPartOfThePassword(t *testing.T) {
 	}
 }
 
-// foreignKeys lists every foreign key on a table in telflo_opamp, and
+// foreignKeys lists every foreign key on a table in opamp_server, and
 // whether it points outside the schema.
 func foreignKeys(t *testing.T, pool *pgxpool.Pool) (all, leaving []string) {
 	t.Helper()
 	rows, err := pool.Query(context.Background(), `
-		select c.conname, rn.nspname <> 'telflo_opamp'
+		select c.conname, rn.nspname <> 'opamp_server'
 		  from pg_constraint c
 		  join pg_class t on t.oid = c.conrelid
 		  join pg_namespace n on n.oid = t.relnamespace
 		  join pg_class r on r.oid = c.confrelid
 		  join pg_namespace rn on rn.oid = r.relnamespace
-		 where c.contype = 'f' and n.nspname = 'telflo_opamp'
+		 where c.contype = 'f' and n.nspname = 'opamp_server'
 		 order by c.conname`)
 	if err != nil {
 		t.Fatal(err)
@@ -1007,7 +1007,7 @@ func foreignKeys(t *testing.T, pool *pgxpool.Pool) (all, leaving []string) {
 	return all, leaving
 }
 
-// foreignKeyDefinitions maps every foreign key on a table in telflo_opamp to
+// foreignKeyDefinitions maps every foreign key on a table in opamp_server to
 // its definition, as pg_get_constraintdef prints it.
 func foreignKeyDefinitions(t *testing.T, pool *pgxpool.Pool) map[string]string {
 	t.Helper()
@@ -1016,7 +1016,7 @@ func foreignKeyDefinitions(t *testing.T, pool *pgxpool.Pool) map[string]string {
 		  from pg_constraint c
 		  join pg_class t on t.oid = c.conrelid
 		  join pg_namespace n on n.oid = t.relnamespace
-		 where c.contype = 'f' and n.nspname = 'telflo_opamp'`)
+		 where c.contype = 'f' and n.nspname = 'opamp_server'`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1035,7 +1035,7 @@ func foreignKeyDefinitions(t *testing.T, pool *pgxpool.Pool) map[string]string {
 	return definitions
 }
 
-// foreignKeyProblems checks the rule every foreign key in telflo_opamp
+// foreignKeyProblems checks the rule every foreign key in opamp_server
 // keeps (docs/decisions/0001-reached-only-through-its-api.md) and answers
 // what breaks it, one finding per key or table:
 //   - no key leaves the schema;
@@ -1053,27 +1053,27 @@ func foreignKeyProblems(t *testing.T, pool *pgxpool.Pool) []string {
 	t.Helper()
 	ctx := context.Background()
 	// isOrganizationCascade is the key (organization_id) ->
-	// telflo_opamp.organizations(id) on delete cascade.
+	// opamp_server.organizations(id) on delete cascade.
 	const isOrganizationCascade = `
 		cardinality(c.conkey) = 1
 		and (select attname from pg_attribute where attrelid = c.conrelid and attnum = c.conkey[1]) = 'organization_id'
 		and (select attname from pg_attribute where attrelid = c.confrelid and attnum = c.confkey[1]) = 'id'
-		and rn.nspname = 'telflo_opamp' and r.relname = 'organizations'
+		and rn.nspname = 'opamp_server' and r.relname = 'organizations'
 		and c.confdeltype = 'c'`
 	rows, err := pool.Query(ctx, `
 		select c.conname, n.nspname || '.' || t.relname,
-		       rn.nspname <> 'telflo_opamp',
+		       rn.nspname <> 'opamp_server',
 		       (cardinality(c.conkey) > 1
 		        and (select attname from pg_attribute where attrelid = c.conrelid and attnum = c.conkey[1]) = 'organization_id'
 		        and (select attname from pg_attribute where attrelid = c.confrelid and attnum = c.confkey[1]) = 'organization_id')
 		       or (`+isOrganizationCascade+`)
-		       or (rn.nspname = 'telflo_opamp' and r.relname = '`+database.ServerTable+`')
+		       or (rn.nspname = 'opamp_server' and r.relname = '`+database.ServerTable+`')
 		  from pg_constraint c
 		  join pg_class t on t.oid = c.conrelid
 		  join pg_namespace n on n.oid = t.relnamespace
 		  join pg_class r on r.oid = c.confrelid
 		  join pg_namespace rn on rn.oid = r.relnamespace
-		 where c.contype = 'f' and n.nspname = 'telflo_opamp'
+		 where c.contype = 'f' and n.nspname = 'opamp_server'
 		 order by c.conname`)
 	if err != nil {
 		t.Fatal(err)
@@ -1086,7 +1086,7 @@ func foreignKeyProblems(t *testing.T, pool *pgxpool.Pool) []string {
 			t.Fatal(err)
 		}
 		if isLeaving {
-			problems = append(problems, name+" on "+table+" leaves telflo_opamp")
+			problems = append(problems, name+" on "+table+" leaves opamp_server")
 		}
 		if !carriesOrganization {
 			problems = append(problems, name+" on "+table+" doesn't carry organization_id")
@@ -1099,7 +1099,7 @@ func foreignKeyProblems(t *testing.T, pool *pgxpool.Pool) []string {
 	rows, err = pool.Query(ctx, `
 		select n.nspname || '.' || t.relname
 		  from pg_class t join pg_namespace n on n.oid = t.relnamespace
-		 where n.nspname = 'telflo_opamp' and t.relkind = 'r'
+		 where n.nspname = 'opamp_server' and t.relkind = 'r'
 		   and t.relname not in ('goose_db_version', 'organizations', '`+database.ServerTable+`')
 		   and not exists (
 		     select 1
@@ -1123,9 +1123,9 @@ func foreignKeyProblems(t *testing.T, pool *pgxpool.Pool) []string {
 
 // organizationCascade is the definition of every table's own key to its
 // organization.
-const organizationCascade = "FOREIGN KEY (organization_id) REFERENCES telflo_opamp.organizations(id) ON DELETE CASCADE"
+const organizationCascade = "FOREIGN KEY (organization_id) REFERENCES opamp_server.organizations(id) ON DELETE CASCADE"
 
-// wantForeignKeys is every foreign key in telflo_opamp at the newest
+// wantForeignKeys is every foreign key in opamp_server at the newest
 // migration, pinned by name and definition as the grants are: each table's
 // cascade from its organization, and every link between an organization's
 // rows a composite key carrying organization_id. NO ACTION prints no
@@ -1135,55 +1135,55 @@ var wantForeignKeys = map[string]string{
 	"fk_fleets_organization":           organizationCascade,
 	"fk_collector_groups_organization": organizationCascade,
 	"fk_collector_groups_fleet": "FOREIGN KEY (organization_id, fleet_id) " +
-		"REFERENCES telflo_opamp.fleets(organization_id, id) ON DELETE CASCADE",
+		"REFERENCES opamp_server.fleets(organization_id, id) ON DELETE CASCADE",
 	"fk_collector_groups_assigned_publication": "FOREIGN KEY (organization_id, assigned_publication_id) " +
-		"REFERENCES telflo_opamp.publications(organization_id, id)",
+		"REFERENCES opamp_server.publications(organization_id, id)",
 	"fk_enrollment_tokens_organization": organizationCascade,
 	"fk_enrollment_tokens_fleet": "FOREIGN KEY (organization_id, fleet_id) " +
-		"REFERENCES telflo_opamp.fleets(organization_id, id) ON DELETE CASCADE",
+		"REFERENCES opamp_server.fleets(organization_id, id) ON DELETE CASCADE",
 	"fk_enrollment_token_events_organization": organizationCascade,
 	"fk_enrollment_token_events_fleet": "FOREIGN KEY (organization_id, fleet_id) " +
-		"REFERENCES telflo_opamp.fleets(organization_id, id) ON DELETE CASCADE",
+		"REFERENCES opamp_server.fleets(organization_id, id) ON DELETE CASCADE",
 	"fk_enrollment_token_events_enrollment_token": "FOREIGN KEY (organization_id, fleet_id, enrollment_token_id) " +
-		"REFERENCES telflo_opamp.enrollment_tokens(organization_id, fleet_id, id) ON DELETE CASCADE",
+		"REFERENCES opamp_server.enrollment_tokens(organization_id, fleet_id, id) ON DELETE CASCADE",
 	"fk_collector_instances_organization": organizationCascade,
 	"fk_collector_instances_fleet": "FOREIGN KEY (organization_id, fleet_id) " +
-		"REFERENCES telflo_opamp.fleets(organization_id, id) ON DELETE CASCADE",
+		"REFERENCES opamp_server.fleets(organization_id, id) ON DELETE CASCADE",
 	"fk_collector_instances_collector_group": "FOREIGN KEY (organization_id, fleet_id, collector_group_id) " +
-		"REFERENCES telflo_opamp.collector_groups(organization_id, fleet_id, id)",
+		"REFERENCES opamp_server.collector_groups(organization_id, fleet_id, id)",
 	"fk_collector_instances_pinned_publication": "FOREIGN KEY (organization_id, pinned_publication_id) " +
-		"REFERENCES telflo_opamp.publications(organization_id, id)",
+		"REFERENCES opamp_server.publications(organization_id, id)",
 	"fk_collector_instances_served_publication": "FOREIGN KEY (organization_id, served_publication_id) " +
-		"REFERENCES telflo_opamp.publications(organization_id, id) ON DELETE SET NULL (served_publication_id)",
+		"REFERENCES opamp_server.publications(organization_id, id) ON DELETE SET NULL (served_publication_id)",
 	"fk_collector_instances_enrollment_token": "FOREIGN KEY (organization_id, fleet_id, enrollment_token_id) " +
-		"REFERENCES telflo_opamp.enrollment_tokens(organization_id, fleet_id, id) ON DELETE SET NULL (enrollment_token_id)",
+		"REFERENCES opamp_server.enrollment_tokens(organization_id, fleet_id, id) ON DELETE SET NULL (enrollment_token_id)",
 	"fk_collector_errors_organization": organizationCascade,
 	"fk_collector_errors_collector_instance": "FOREIGN KEY (organization_id, collector_instance_id) " +
-		"REFERENCES telflo_opamp.collector_instances(organization_id, id) ON DELETE CASCADE",
+		"REFERENCES opamp_server.collector_instances(organization_id, id) ON DELETE CASCADE",
 	// Migration 00012: the variables' tables, and the two bindings, NO ACTION,
 	// so a variable group in use can't go.
 	"fk_variables_organization":                organizationCascade,
 	"fk_variable_groups_organization":          organizationCascade,
 	"fk_variable_group_overrides_organization": organizationCascade,
 	"fk_variable_group_overrides_variable_group": "FOREIGN KEY (organization_id, variable_group_id) " +
-		"REFERENCES telflo_opamp.variable_groups(organization_id, id) ON DELETE CASCADE",
+		"REFERENCES opamp_server.variable_groups(organization_id, id) ON DELETE CASCADE",
 	"fk_variable_group_overrides_variable": "FOREIGN KEY (organization_id, variable_id) " +
-		"REFERENCES telflo_opamp.variables(organization_id, id) ON DELETE CASCADE",
+		"REFERENCES opamp_server.variables(organization_id, id) ON DELETE CASCADE",
 	"fk_publication_variable_names_organization": organizationCascade,
 	"fk_publication_variable_names_publication": "FOREIGN KEY (organization_id, publication_id) " +
-		"REFERENCES telflo_opamp.publications(organization_id, id) ON DELETE CASCADE",
+		"REFERENCES opamp_server.publications(organization_id, id) ON DELETE CASCADE",
 	"fk_collector_groups_variable_group": "FOREIGN KEY (organization_id, variable_group_id) " +
-		"REFERENCES telflo_opamp.variable_groups(organization_id, id)",
+		"REFERENCES opamp_server.variable_groups(organization_id, id)",
 	"fk_collector_instances_pinned_variable_group": "FOREIGN KEY (organization_id, pinned_variable_group_id) " +
-		"REFERENCES telflo_opamp.variable_groups(organization_id, id)",
+		"REFERENCES opamp_server.variable_groups(organization_id, id)",
 	// Migration 00013: a key's organizations, and the key, the server's own
 	// row, which carries no organization.
 	"fk_api_key_organizations_organization": organizationCascade,
 	"fk_api_key_organizations_api_key": "FOREIGN KEY (api_key_id) " +
-		"REFERENCES telflo_opamp.api_keys(id) ON DELETE CASCADE",
+		"REFERENCES opamp_server.api_keys(id) ON DELETE CASCADE",
 }
 
-// No foreign key leaves telflo_opamp
+// No foreign key leaves opamp_server
 // (docs/decisions/0001-reached-only-through-its-api.md), and every one
 // inside it carries the organization: each table's own cascade from its
 // organization, and every other link a composite key whose first column is
@@ -1216,7 +1216,7 @@ func TestForeignKeyCheckSeesAForeignKeyIntoPublic(t *testing.T) {
 
 	for _, statement := range []string{
 		"create table public.platform_like (id uuid primary key)",
-		`alter table telflo_opamp.publications add constraint fk_publications_platform_like
+		`alter table opamp_server.publications add constraint fk_publications_platform_like
 		   foreign key (organization_id) references public.platform_like (id)`,
 	} {
 		if _, err := d.Admin.Exec(ctx, statement); err != nil {
@@ -1234,8 +1234,8 @@ func TestForeignKeyCheckSeesAForeignKeyIntoPublic(t *testing.T) {
 		t.Fatalf("the check saw all=%v leaving=%v, want the one foreign key into public among the schema's", all, leaving)
 	}
 	if problems := foreignKeyProblems(t, d.Admin); !slices.Equal(problems, []string{
-		"fk_publications_platform_like on telflo_opamp.publications leaves telflo_opamp",
-		"fk_publications_platform_like on telflo_opamp.publications doesn't carry organization_id",
+		"fk_publications_platform_like on opamp_server.publications leaves opamp_server",
+		"fk_publications_platform_like on opamp_server.publications doesn't carry organization_id",
 	}) {
 		t.Fatalf("the rule saw %v, want the key into public", problems)
 	}
@@ -1251,12 +1251,12 @@ func TestForeignKeyCheckSeesAForeignKeyIntoPublic(t *testing.T) {
 func TestForeignKeyCheckSeesAKeyWithoutTheOrganization(t *testing.T) {
 	d := databasetest.New(t, testDatabase)
 	if _, err := d.Admin.Exec(context.Background(), `
-		alter table telflo_opamp.collector_instances add constraint fk_collector_instances_fleet_alone
-		  foreign key (fleet_id) references telflo_opamp.fleets (id) on delete cascade`); err != nil {
+		alter table opamp_server.collector_instances add constraint fk_collector_instances_fleet_alone
+		  foreign key (fleet_id) references opamp_server.fleets (id) on delete cascade`); err != nil {
 		t.Fatal(err)
 	}
 	if problems := foreignKeyProblems(t, d.Admin); !slices.Equal(problems, []string{
-		"fk_collector_instances_fleet_alone on telflo_opamp.collector_instances doesn't carry organization_id",
+		"fk_collector_instances_fleet_alone on opamp_server.collector_instances doesn't carry organization_id",
 	}) {
 		t.Fatalf("the rule saw %v, want the key without organization_id", problems)
 	}
@@ -1268,19 +1268,19 @@ func TestForeignKeyCheckSeesAKeyWithoutTheOrganization(t *testing.T) {
 func TestForeignKeyCheckSeesATableWithoutItsOrganizationsCascade(t *testing.T) {
 	d := databasetest.New(t, testDatabase)
 	for _, statement := range []string{
-		"alter table telflo_opamp.enrollment_token_events drop constraint fk_enrollment_token_events_organization",
-		"alter table telflo_opamp.collector_errors drop constraint fk_collector_errors_organization",
-		`alter table telflo_opamp.collector_errors add constraint fk_collector_errors_organization
-		   foreign key (organization_id) references telflo_opamp.organizations (id)`,
+		"alter table opamp_server.enrollment_token_events drop constraint fk_enrollment_token_events_organization",
+		"alter table opamp_server.collector_errors drop constraint fk_collector_errors_organization",
+		`alter table opamp_server.collector_errors add constraint fk_collector_errors_organization
+		   foreign key (organization_id) references opamp_server.organizations (id)`,
 	} {
 		if _, err := d.Admin.Exec(context.Background(), statement); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if problems := foreignKeyProblems(t, d.Admin); !slices.Equal(problems, []string{
-		"fk_collector_errors_organization on telflo_opamp.collector_errors doesn't carry organization_id",
-		"telflo_opamp.collector_errors has no (organization_id) -> organizations(id) on delete cascade",
-		"telflo_opamp.enrollment_token_events has no (organization_id) -> organizations(id) on delete cascade",
+		"fk_collector_errors_organization on opamp_server.collector_errors doesn't carry organization_id",
+		"opamp_server.collector_errors has no (organization_id) -> organizations(id) on delete cascade",
+		"opamp_server.enrollment_token_events has no (organization_id) -> organizations(id) on delete cascade",
 	}) {
 		t.Fatalf("the rule saw %v, want both tables", problems)
 	}
@@ -1332,7 +1332,7 @@ func sameGrants(got, want []string) bool {
 }
 
 // migrationStep is what one migration makes: the tables it creates and the
-// grants it gives telflo_opamp_runtime, each of which its Down takes back.
+// grants it gives telflo_opamp_server_runtime, each of which its Down takes back.
 // Every embedded migration has an entry, so a new one must say here what it
 // makes and grants.
 type migrationStep struct {
@@ -1344,7 +1344,7 @@ type migrationStep struct {
 func relationGrants(table string, privileges ...string) []string {
 	grants := make([]string, 0, len(privileges))
 	for _, privilege := range privileges {
-		grants = append(grants, "relation telflo_opamp."+table+" "+privilege)
+		grants = append(grants, "relation opamp_server."+table+" "+privilege)
 	}
 	return grants
 }
@@ -1354,14 +1354,14 @@ func relationGrants(table string, privileges ...string) []string {
 func columnUpdates(table string, columns ...string) []string {
 	grants := make([]string, 0, len(columns))
 	for _, column := range columns {
-		grants = append(grants, "column telflo_opamp."+table+"."+column+" UPDATE")
+		grants = append(grants, "column opamp_server."+table+"."+column+" UPDATE")
 	}
 	return grants
 }
 
 var migrationSteps = map[int64]migrationStep{
 	1: {[]string{"publications"}, slices.Concat(
-		[]string{"schema telflo_opamp USAGE", "relation telflo_opamp.goose_db_version SELECT"},
+		[]string{"schema opamp_server USAGE", "relation opamp_server.goose_db_version SELECT"},
 		relationGrants("publications", "SELECT", "INSERT", "DELETE"))},
 	2: {[]string{"organizations"}, slices.Concat(
 		relationGrants("organizations", "SELECT", "INSERT", "DELETE"),
@@ -1406,7 +1406,7 @@ var migrationSteps = map[int64]migrationStep{
 		relationGrants("api_key_organizations", "SELECT", "INSERT"))},
 }
 
-// grantsAt is what telflo_opamp_runtime holds with the schema at version:
+// grantsAt is what telflo_opamp_server_runtime holds with the schema at version:
 // every grant of the migrations up to it, in byte order.
 func grantsAt(version int64) []string {
 	var grants []string
@@ -1430,7 +1430,7 @@ func assertTablesAt(t *testing.T, pool *pgxpool.Pool, version int64) {
 	}
 }
 
-// wantRuntimeGrants is what telflo_opamp_runtime holds at the newest
+// wantRuntimeGrants is what telflo_opamp_server_runtime holds at the newest
 // migration, in byte order: select, insert and delete where the server adds
 // and removes rows; update only on the columns it changes, so the ids,
 // organizations, fleets, a fleet's type, a group's is_default, a token's
@@ -1446,104 +1446,104 @@ func assertTablesAt(t *testing.T, pool *pgxpool.Pool, version int64) {
 // description, its revocation and its last use change, never its secret,
 // its organizations or its expiry.
 var wantRuntimeGrants = []string{
-	"column telflo_opamp.api_keys.description UPDATE",
-	"column telflo_opamp.api_keys.last_used_at UPDATE",
-	"column telflo_opamp.api_keys.name UPDATE",
-	"column telflo_opamp.api_keys.revoked_at UPDATE",
-	"column telflo_opamp.collector_groups.annotations UPDATE",
-	"column telflo_opamp.collector_groups.assigned_publication_id UPDATE",
-	"column telflo_opamp.collector_groups.name UPDATE",
-	"column telflo_opamp.collector_groups.updated_at UPDATE",
-	"column telflo_opamp.collector_groups.variable_group_id UPDATE",
-	"column telflo_opamp.collector_groups.variable_group_stamp UPDATE",
-	"column telflo_opamp.collector_instances.collector_group_id UPDATE",
-	"column telflo_opamp.collector_instances.effective_at UPDATE",
-	"column telflo_opamp.collector_instances.effective_error UPDATE",
-	"column telflo_opamp.collector_instances.effective_sha256 UPDATE",
-	"column telflo_opamp.collector_instances.effective_status UPDATE",
-	"column telflo_opamp.collector_instances.enrollment_token_id UPDATE",
-	"column telflo_opamp.collector_instances.full_state_requested_at UPDATE",
-	"column telflo_opamp.collector_instances.last_seen_at UPDATE",
-	"column telflo_opamp.collector_instances.name UPDATE",
-	"column telflo_opamp.collector_instances.pinned_publication_id UPDATE",
-	"column telflo_opamp.collector_instances.pinned_variable_group_id UPDATE",
-	"column telflo_opamp.collector_instances.pinned_variable_group_stamp UPDATE",
-	"column telflo_opamp.collector_instances.reported_attributes UPDATE",
-	"column telflo_opamp.collector_instances.reported_collector_version UPDATE",
-	"column telflo_opamp.collector_instances.reported_host_ip UPDATE",
-	"column telflo_opamp.collector_instances.reported_ip UPDATE",
-	"column telflo_opamp.collector_instances.served_at UPDATE",
-	"column telflo_opamp.collector_instances.served_publication_id UPDATE",
-	"column telflo_opamp.collector_instances.served_sha256 UPDATE",
-	"column telflo_opamp.collector_instances.served_variables_stamp UPDATE",
-	"column telflo_opamp.collector_instances.updated_at UPDATE",
-	"column telflo_opamp.enrollment_tokens.do_refresh UPDATE",
-	"column telflo_opamp.enrollment_tokens.expires_at UPDATE",
-	"column telflo_opamp.enrollment_tokens.revoked_at UPDATE",
-	"column telflo_opamp.fleets.label UPDATE",
-	"column telflo_opamp.fleets.status UPDATE",
-	"column telflo_opamp.fleets.updated_at UPDATE",
-	"column telflo_opamp.organizations.max_collectors UPDATE",
-	"column telflo_opamp.organizations.name UPDATE",
-	"column telflo_opamp.organizations.requests_per_minute UPDATE",
-	"column telflo_opamp.organizations.updated_at UPDATE",
-	"column telflo_opamp.organizations.variables_revision UPDATE",
-	"column telflo_opamp.variable_group_overrides.changed_at UPDATE",
-	"column telflo_opamp.variable_group_overrides.changed_by_email UPDATE",
-	"column telflo_opamp.variable_group_overrides.changed_by_id UPDATE",
-	"column telflo_opamp.variable_group_overrides.stamp UPDATE",
-	"column telflo_opamp.variable_group_overrides.value UPDATE",
-	"column telflo_opamp.variable_groups.changed_at UPDATE",
-	"column telflo_opamp.variable_groups.changed_by_email UPDATE",
-	"column telflo_opamp.variable_groups.changed_by_id UPDATE",
-	"column telflo_opamp.variable_groups.description UPDATE",
-	"column telflo_opamp.variable_groups.name UPDATE",
-	"column telflo_opamp.variables.changed_at UPDATE",
-	"column telflo_opamp.variables.changed_by_email UPDATE",
-	"column telflo_opamp.variables.changed_by_id UPDATE",
-	"column telflo_opamp.variables.description UPDATE",
-	"column telflo_opamp.variables.name UPDATE",
-	"column telflo_opamp.variables.stamp UPDATE",
-	"column telflo_opamp.variables.value UPDATE",
-	"relation telflo_opamp.api_key_organizations INSERT",
-	"relation telflo_opamp.api_key_organizations SELECT",
-	"relation telflo_opamp.api_keys INSERT",
-	"relation telflo_opamp.api_keys SELECT",
-	"relation telflo_opamp.collector_errors DELETE",
-	"relation telflo_opamp.collector_errors INSERT",
-	"relation telflo_opamp.collector_errors SELECT",
-	"relation telflo_opamp.collector_groups DELETE",
-	"relation telflo_opamp.collector_groups INSERT",
-	"relation telflo_opamp.collector_groups SELECT",
-	"relation telflo_opamp.collector_instances DELETE",
-	"relation telflo_opamp.collector_instances INSERT",
-	"relation telflo_opamp.collector_instances SELECT",
-	"relation telflo_opamp.enrollment_token_events INSERT",
-	"relation telflo_opamp.enrollment_token_events SELECT",
-	"relation telflo_opamp.enrollment_tokens INSERT",
-	"relation telflo_opamp.enrollment_tokens SELECT",
-	"relation telflo_opamp.fleets DELETE",
-	"relation telflo_opamp.fleets INSERT",
-	"relation telflo_opamp.fleets SELECT",
-	"relation telflo_opamp.goose_db_version SELECT",
-	"relation telflo_opamp.organizations DELETE",
-	"relation telflo_opamp.organizations INSERT",
-	"relation telflo_opamp.organizations SELECT",
-	"relation telflo_opamp.publication_variable_names INSERT",
-	"relation telflo_opamp.publication_variable_names SELECT",
-	"relation telflo_opamp.publications DELETE",
-	"relation telflo_opamp.publications INSERT",
-	"relation telflo_opamp.publications SELECT",
-	"relation telflo_opamp.variable_group_overrides DELETE",
-	"relation telflo_opamp.variable_group_overrides INSERT",
-	"relation telflo_opamp.variable_group_overrides SELECT",
-	"relation telflo_opamp.variable_groups DELETE",
-	"relation telflo_opamp.variable_groups INSERT",
-	"relation telflo_opamp.variable_groups SELECT",
-	"relation telflo_opamp.variables DELETE",
-	"relation telflo_opamp.variables INSERT",
-	"relation telflo_opamp.variables SELECT",
-	"schema telflo_opamp USAGE",
+	"column opamp_server.api_keys.description UPDATE",
+	"column opamp_server.api_keys.last_used_at UPDATE",
+	"column opamp_server.api_keys.name UPDATE",
+	"column opamp_server.api_keys.revoked_at UPDATE",
+	"column opamp_server.collector_groups.annotations UPDATE",
+	"column opamp_server.collector_groups.assigned_publication_id UPDATE",
+	"column opamp_server.collector_groups.name UPDATE",
+	"column opamp_server.collector_groups.updated_at UPDATE",
+	"column opamp_server.collector_groups.variable_group_id UPDATE",
+	"column opamp_server.collector_groups.variable_group_stamp UPDATE",
+	"column opamp_server.collector_instances.collector_group_id UPDATE",
+	"column opamp_server.collector_instances.effective_at UPDATE",
+	"column opamp_server.collector_instances.effective_error UPDATE",
+	"column opamp_server.collector_instances.effective_sha256 UPDATE",
+	"column opamp_server.collector_instances.effective_status UPDATE",
+	"column opamp_server.collector_instances.enrollment_token_id UPDATE",
+	"column opamp_server.collector_instances.full_state_requested_at UPDATE",
+	"column opamp_server.collector_instances.last_seen_at UPDATE",
+	"column opamp_server.collector_instances.name UPDATE",
+	"column opamp_server.collector_instances.pinned_publication_id UPDATE",
+	"column opamp_server.collector_instances.pinned_variable_group_id UPDATE",
+	"column opamp_server.collector_instances.pinned_variable_group_stamp UPDATE",
+	"column opamp_server.collector_instances.reported_attributes UPDATE",
+	"column opamp_server.collector_instances.reported_collector_version UPDATE",
+	"column opamp_server.collector_instances.reported_host_ip UPDATE",
+	"column opamp_server.collector_instances.reported_ip UPDATE",
+	"column opamp_server.collector_instances.served_at UPDATE",
+	"column opamp_server.collector_instances.served_publication_id UPDATE",
+	"column opamp_server.collector_instances.served_sha256 UPDATE",
+	"column opamp_server.collector_instances.served_variables_stamp UPDATE",
+	"column opamp_server.collector_instances.updated_at UPDATE",
+	"column opamp_server.enrollment_tokens.do_refresh UPDATE",
+	"column opamp_server.enrollment_tokens.expires_at UPDATE",
+	"column opamp_server.enrollment_tokens.revoked_at UPDATE",
+	"column opamp_server.fleets.label UPDATE",
+	"column opamp_server.fleets.status UPDATE",
+	"column opamp_server.fleets.updated_at UPDATE",
+	"column opamp_server.organizations.max_collectors UPDATE",
+	"column opamp_server.organizations.name UPDATE",
+	"column opamp_server.organizations.requests_per_minute UPDATE",
+	"column opamp_server.organizations.updated_at UPDATE",
+	"column opamp_server.organizations.variables_revision UPDATE",
+	"column opamp_server.variable_group_overrides.changed_at UPDATE",
+	"column opamp_server.variable_group_overrides.changed_by_email UPDATE",
+	"column opamp_server.variable_group_overrides.changed_by_id UPDATE",
+	"column opamp_server.variable_group_overrides.stamp UPDATE",
+	"column opamp_server.variable_group_overrides.value UPDATE",
+	"column opamp_server.variable_groups.changed_at UPDATE",
+	"column opamp_server.variable_groups.changed_by_email UPDATE",
+	"column opamp_server.variable_groups.changed_by_id UPDATE",
+	"column opamp_server.variable_groups.description UPDATE",
+	"column opamp_server.variable_groups.name UPDATE",
+	"column opamp_server.variables.changed_at UPDATE",
+	"column opamp_server.variables.changed_by_email UPDATE",
+	"column opamp_server.variables.changed_by_id UPDATE",
+	"column opamp_server.variables.description UPDATE",
+	"column opamp_server.variables.name UPDATE",
+	"column opamp_server.variables.stamp UPDATE",
+	"column opamp_server.variables.value UPDATE",
+	"relation opamp_server.api_key_organizations INSERT",
+	"relation opamp_server.api_key_organizations SELECT",
+	"relation opamp_server.api_keys INSERT",
+	"relation opamp_server.api_keys SELECT",
+	"relation opamp_server.collector_errors DELETE",
+	"relation opamp_server.collector_errors INSERT",
+	"relation opamp_server.collector_errors SELECT",
+	"relation opamp_server.collector_groups DELETE",
+	"relation opamp_server.collector_groups INSERT",
+	"relation opamp_server.collector_groups SELECT",
+	"relation opamp_server.collector_instances DELETE",
+	"relation opamp_server.collector_instances INSERT",
+	"relation opamp_server.collector_instances SELECT",
+	"relation opamp_server.enrollment_token_events INSERT",
+	"relation opamp_server.enrollment_token_events SELECT",
+	"relation opamp_server.enrollment_tokens INSERT",
+	"relation opamp_server.enrollment_tokens SELECT",
+	"relation opamp_server.fleets DELETE",
+	"relation opamp_server.fleets INSERT",
+	"relation opamp_server.fleets SELECT",
+	"relation opamp_server.goose_db_version SELECT",
+	"relation opamp_server.organizations DELETE",
+	"relation opamp_server.organizations INSERT",
+	"relation opamp_server.organizations SELECT",
+	"relation opamp_server.publication_variable_names INSERT",
+	"relation opamp_server.publication_variable_names SELECT",
+	"relation opamp_server.publications DELETE",
+	"relation opamp_server.publications INSERT",
+	"relation opamp_server.publications SELECT",
+	"relation opamp_server.variable_group_overrides DELETE",
+	"relation opamp_server.variable_group_overrides INSERT",
+	"relation opamp_server.variable_group_overrides SELECT",
+	"relation opamp_server.variable_groups DELETE",
+	"relation opamp_server.variable_groups INSERT",
+	"relation opamp_server.variable_groups SELECT",
+	"relation opamp_server.variables DELETE",
+	"relation opamp_server.variables INSERT",
+	"relation opamp_server.variables SELECT",
+	"schema opamp_server USAGE",
 }
 
 func TestRuntimeRolePrivilegesAreExactlyWhatTheServerNeeds(t *testing.T) {
@@ -1554,7 +1554,7 @@ func TestRuntimeRolePrivilegesAreExactlyWhatTheServerNeeds(t *testing.T) {
 		t.Errorf("%s holds %v, want exactly %v", database.RuntimeRole, got, wantRuntimeGrants)
 	}
 	// The server's role holds nothing of its own beyond logging in.
-	if got := runtimeGrants(t, d.Admin, database.ServerRole); !slices.Equal(got, []string{"database telflo_opamp_database_test CONNECT"}) {
+	if got := runtimeGrants(t, d.Admin, database.ServerRole); !slices.Equal(got, []string{"database telflo_opamp_server_database_test CONNECT"}) {
 		t.Errorf("%s holds %v directly, want only CONNECT", database.ServerRole, got)
 	}
 	// And PUBLIC, which every role is a member of, holds nothing on the
@@ -1568,96 +1568,96 @@ func TestRuntimeRolePrivilegesAreExactlyWhatTheServerNeeds(t *testing.T) {
 		query string
 		want  bool
 	}{
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.publications', 'SELECT, INSERT, DELETE')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.publications', 'UPDATE')", false},
-		{"select has_table_privilege('telflo_opamp_runtime', 'telflo_opamp.publications', 'UPDATE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.publications', 'TRUNCATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.publications', 'SELECT, INSERT, DELETE')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.publications', 'UPDATE')", false},
+		{"select has_table_privilege('telflo_opamp_server_runtime', 'opamp_server.publications', 'UPDATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.publications', 'TRUNCATE')", false},
 		// Organizations may be read, registered, renamed and deleted; a rename
 		// touches name and updated_at only. The limits may be set.
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.organizations', 'SELECT, INSERT, DELETE')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.organizations', 'UPDATE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.organizations', 'TRUNCATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.organizations', 'name', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.organizations', 'updated_at', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.organizations', 'max_collectors', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.organizations', 'requests_per_minute', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.organizations', 'id', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.organizations', 'created_at', 'UPDATE')", false},
-		{"select has_any_column_privilege('telflo_opamp', 'telflo_opamp.publications', 'UPDATE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.goose_db_version', 'SELECT')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.goose_db_version', 'INSERT, UPDATE, DELETE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.organizations', 'SELECT, INSERT, DELETE')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.organizations', 'UPDATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.organizations', 'TRUNCATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.organizations', 'name', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.organizations', 'updated_at', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.organizations', 'max_collectors', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.organizations', 'requests_per_minute', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.organizations', 'id', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.organizations', 'created_at', 'UPDATE')", false},
+		{"select has_any_column_privilege('telflo_opamp_server', 'opamp_server.publications', 'UPDATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.goose_db_version', 'SELECT')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.goose_db_version', 'INSERT, UPDATE, DELETE')", false},
 		// The fleet model. Rows the server adds and removes; tokens and token
 		// events it never deletes.
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.fleets', 'SELECT, INSERT, DELETE')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.collector_groups', 'SELECT, INSERT, DELETE')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.collector_instances', 'SELECT, INSERT, DELETE')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.collector_errors', 'SELECT, INSERT, DELETE')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.enrollment_tokens', 'SELECT, INSERT')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.enrollment_token_events', 'SELECT, INSERT')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.enrollment_tokens', 'DELETE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.enrollment_token_events', 'DELETE')", false},
-		{"select has_any_column_privilege('telflo_opamp', 'telflo_opamp.enrollment_token_events', 'UPDATE')", false},
-		{"select has_any_column_privilege('telflo_opamp', 'telflo_opamp.collector_errors', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.fleets', 'type', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.collector_groups', 'is_default', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.collector_instances', 'fleet_id', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.enrollment_tokens', 'kind', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.collector_instances', 'last_seen_at', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.enrollment_tokens', 'revoked_at', 'UPDATE')", true},
-		{"select has_schema_privilege('telflo_opamp', 'telflo_opamp', 'CREATE')", false},
-		{"select has_schema_privilege('telflo_opamp', 'public', 'CREATE')", false},
-		{"select has_database_privilege('telflo_opamp', current_database(), 'CREATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.fleets', 'SELECT, INSERT, DELETE')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.collector_groups', 'SELECT, INSERT, DELETE')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.collector_instances', 'SELECT, INSERT, DELETE')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.collector_errors', 'SELECT, INSERT, DELETE')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.enrollment_tokens', 'SELECT, INSERT')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.enrollment_token_events', 'SELECT, INSERT')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.enrollment_tokens', 'DELETE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.enrollment_token_events', 'DELETE')", false},
+		{"select has_any_column_privilege('telflo_opamp_server', 'opamp_server.enrollment_token_events', 'UPDATE')", false},
+		{"select has_any_column_privilege('telflo_opamp_server', 'opamp_server.collector_errors', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.fleets', 'type', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.collector_groups', 'is_default', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.collector_instances', 'fleet_id', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.enrollment_tokens', 'kind', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.collector_instances', 'last_seen_at', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.enrollment_tokens', 'revoked_at', 'UPDATE')", true},
+		{"select has_schema_privilege('telflo_opamp_server', 'opamp_server', 'CREATE')", false},
+		{"select has_schema_privilege('telflo_opamp_server', 'public', 'CREATE')", false},
+		{"select has_database_privilege('telflo_opamp_server', current_database(), 'CREATE')", false},
 		// No temporary tables either, through PUBLIC or not.
-		{"select has_database_privilege('telflo_opamp', current_database(), 'TEMPORARY')", false},
-		{"select has_database_privilege('telflo_opamp_runtime', current_database(), 'TEMPORARY')", false},
-		{"select has_database_privilege('telflo_opamp', current_database(), 'CONNECT')", true},
+		{"select has_database_privilege('telflo_opamp_server', current_database(), 'TEMPORARY')", false},
+		{"select has_database_privilege('telflo_opamp_server_runtime', current_database(), 'TEMPORARY')", false},
+		{"select has_database_privilege('telflo_opamp_server', current_database(), 'CONNECT')", true},
 		// Migration 00012: the variables' tables. Rows the server adds,
 		// changes and removes; the names a published version references it
 		// only inserts. Each column grant, and none on an id, an
 		// organization, an override's keys or any column of the names table.
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.organizations', 'variables_revision', 'UPDATE')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.variables', 'SELECT, INSERT, DELETE')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.variable_groups', 'SELECT, INSERT, DELETE')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'SELECT, INSERT, DELETE')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.publication_variable_names', 'SELECT, INSERT')", true},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.publication_variable_names', 'DELETE')", false},
-		{"select has_any_column_privilege('telflo_opamp', 'telflo_opamp.publication_variable_names', 'UPDATE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.variables', 'UPDATE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.variable_groups', 'UPDATE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'UPDATE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.variables', 'TRUNCATE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.variable_groups', 'TRUNCATE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'TRUNCATE')", false},
-		{"select has_table_privilege('telflo_opamp', 'telflo_opamp.publication_variable_names', 'TRUNCATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variables', 'name', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variables', 'description', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variables', 'value', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variables', 'changed_by_id', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variables', 'changed_by_email', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variables', 'changed_at', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variables', 'stamp', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variables', 'id', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variables', 'organization_id', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_groups', 'name', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_groups', 'description', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_groups', 'changed_by_id', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_groups', 'changed_by_email', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_groups', 'changed_at', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_groups', 'id', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_groups', 'organization_id', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'value', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'changed_by_id', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'changed_by_email', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'changed_at', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'stamp', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'organization_id', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'variable_group_id', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.variable_group_overrides', 'variable_id', 'UPDATE')", false},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.collector_groups', 'variable_group_id', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.collector_groups', 'variable_group_stamp', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.collector_instances', 'pinned_variable_group_id', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.collector_instances', 'pinned_variable_group_stamp', 'UPDATE')", true},
-		{"select has_column_privilege('telflo_opamp', 'telflo_opamp.collector_instances', 'served_variables_stamp', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.organizations', 'variables_revision', 'UPDATE')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.variables', 'SELECT, INSERT, DELETE')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.variable_groups', 'SELECT, INSERT, DELETE')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'SELECT, INSERT, DELETE')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.publication_variable_names', 'SELECT, INSERT')", true},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.publication_variable_names', 'DELETE')", false},
+		{"select has_any_column_privilege('telflo_opamp_server', 'opamp_server.publication_variable_names', 'UPDATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.variables', 'UPDATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.variable_groups', 'UPDATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'UPDATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.variables', 'TRUNCATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.variable_groups', 'TRUNCATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'TRUNCATE')", false},
+		{"select has_table_privilege('telflo_opamp_server', 'opamp_server.publication_variable_names', 'TRUNCATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variables', 'name', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variables', 'description', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variables', 'value', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variables', 'changed_by_id', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variables', 'changed_by_email', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variables', 'changed_at', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variables', 'stamp', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variables', 'id', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variables', 'organization_id', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_groups', 'name', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_groups', 'description', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_groups', 'changed_by_id', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_groups', 'changed_by_email', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_groups', 'changed_at', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_groups', 'id', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_groups', 'organization_id', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'value', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'changed_by_id', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'changed_by_email', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'changed_at', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'stamp', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'organization_id', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'variable_group_id', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.variable_group_overrides', 'variable_id', 'UPDATE')", false},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.collector_groups', 'variable_group_id', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.collector_groups', 'variable_group_stamp', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.collector_instances', 'pinned_variable_group_id', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.collector_instances', 'pinned_variable_group_stamp', 'UPDATE')", true},
+		{"select has_column_privilege('telflo_opamp_server', 'opamp_server.collector_instances', 'served_variables_stamp', 'UPDATE')", true},
 	}
 	for _, check := range checks {
 		var got bool
@@ -1676,55 +1676,55 @@ func TestRuntimeRolePrivilegesAreExactlyWhatTheServerNeeds(t *testing.T) {
 	// or created_at; no update or delete of a token event, no delete of a
 	// token, no truncate.
 	for _, statement := range []string{
-		"create table telflo_opamp.not_allowed (id integer)",
+		"create table opamp_server.not_allowed (id integer)",
 		"create table public.not_allowed (id integer)",
-		"update telflo_opamp.publications set yaml = ''",
-		"update telflo_opamp.organizations set id = gen_random_uuid()",
-		"update telflo_opamp.organizations set created_at = updated_at",
-		"truncate telflo_opamp.organizations",
-		"update telflo_opamp.fleets set type = 'server'",
-		"update telflo_opamp.fleets set id = id",
-		"update telflo_opamp.fleets set organization_id = organization_id",
-		"update telflo_opamp.fleets set created_at = updated_at",
-		"update telflo_opamp.collector_groups set is_default = false",
-		"update telflo_opamp.collector_groups set fleet_id = fleet_id",
-		"update telflo_opamp.collector_groups set organization_id = organization_id",
-		"update telflo_opamp.collector_groups set created_at = updated_at",
-		"update telflo_opamp.enrollment_tokens set kind = 'rotate'",
-		"update telflo_opamp.enrollment_tokens set fleet_id = fleet_id",
-		"update telflo_opamp.enrollment_tokens set organization_id = organization_id",
-		"update telflo_opamp.enrollment_tokens set created_at = created_at",
-		"delete from telflo_opamp.enrollment_tokens",
-		"update telflo_opamp.enrollment_token_events set event = 'viewed'",
-		"delete from telflo_opamp.enrollment_token_events",
-		"update telflo_opamp.collector_instances set fleet_id = fleet_id",
-		"update telflo_opamp.collector_instances set instance_uid = instance_uid",
-		"update telflo_opamp.collector_instances set organization_id = organization_id",
-		"update telflo_opamp.collector_instances set created_at = updated_at",
-		"update telflo_opamp.collector_errors set message = 'x'",
-		"truncate telflo_opamp.fleets",
-		"truncate telflo_opamp.collector_instances",
-		"truncate telflo_opamp.collector_errors",
+		"update opamp_server.publications set yaml = ''",
+		"update opamp_server.organizations set id = gen_random_uuid()",
+		"update opamp_server.organizations set created_at = updated_at",
+		"truncate opamp_server.organizations",
+		"update opamp_server.fleets set type = 'server'",
+		"update opamp_server.fleets set id = id",
+		"update opamp_server.fleets set organization_id = organization_id",
+		"update opamp_server.fleets set created_at = updated_at",
+		"update opamp_server.collector_groups set is_default = false",
+		"update opamp_server.collector_groups set fleet_id = fleet_id",
+		"update opamp_server.collector_groups set organization_id = organization_id",
+		"update opamp_server.collector_groups set created_at = updated_at",
+		"update opamp_server.enrollment_tokens set kind = 'rotate'",
+		"update opamp_server.enrollment_tokens set fleet_id = fleet_id",
+		"update opamp_server.enrollment_tokens set organization_id = organization_id",
+		"update opamp_server.enrollment_tokens set created_at = created_at",
+		"delete from opamp_server.enrollment_tokens",
+		"update opamp_server.enrollment_token_events set event = 'viewed'",
+		"delete from opamp_server.enrollment_token_events",
+		"update opamp_server.collector_instances set fleet_id = fleet_id",
+		"update opamp_server.collector_instances set instance_uid = instance_uid",
+		"update opamp_server.collector_instances set organization_id = organization_id",
+		"update opamp_server.collector_instances set created_at = updated_at",
+		"update opamp_server.collector_errors set message = 'x'",
+		"truncate opamp_server.fleets",
+		"truncate opamp_server.collector_instances",
+		"truncate opamp_server.collector_errors",
 		// Migration 00012.
-		"update telflo_opamp.variables set organization_id = organization_id",
-		"update telflo_opamp.variables set id = id",
-		"update telflo_opamp.variable_groups set organization_id = organization_id",
-		"update telflo_opamp.variable_groups set id = id",
-		"update telflo_opamp.variable_group_overrides set organization_id = organization_id",
-		"update telflo_opamp.variable_group_overrides set variable_group_id = variable_group_id",
-		"update telflo_opamp.variable_group_overrides set variable_id = variable_id",
-		"update telflo_opamp.publication_variable_names set name = 'X'",
-		"update telflo_opamp.publication_variable_names set publication_id = publication_id",
-		"delete from telflo_opamp.publication_variable_names",
-		"truncate telflo_opamp.variables",
-		"truncate telflo_opamp.variable_groups",
-		"truncate telflo_opamp.variable_group_overrides",
-		"truncate telflo_opamp.publication_variable_names",
+		"update opamp_server.variables set organization_id = organization_id",
+		"update opamp_server.variables set id = id",
+		"update opamp_server.variable_groups set organization_id = organization_id",
+		"update opamp_server.variable_groups set id = id",
+		"update opamp_server.variable_group_overrides set organization_id = organization_id",
+		"update opamp_server.variable_group_overrides set variable_group_id = variable_group_id",
+		"update opamp_server.variable_group_overrides set variable_id = variable_id",
+		"update opamp_server.publication_variable_names set name = 'X'",
+		"update opamp_server.publication_variable_names set publication_id = publication_id",
+		"delete from opamp_server.publication_variable_names",
+		"truncate opamp_server.variables",
+		"truncate opamp_server.variable_groups",
+		"truncate opamp_server.variable_group_overrides",
+		"truncate opamp_server.publication_variable_names",
 	} {
 		_, err := d.Runtime.Exec(ctx, statement)
 		var pgErr *pgconn.PgError
 		if !errors.As(err, &pgErr) || pgErr.Code != "42501" {
-			t.Errorf("%q as telflo_opamp: err = %v, want 42501 insufficient_privilege", statement, err)
+			t.Errorf("%q as telflo_opamp_server: err = %v, want 42501 insufficient_privilege", statement, err)
 		}
 	}
 }
@@ -1761,7 +1761,7 @@ func TestPrivilegeCheckSeesTemporaryGrantedToPublic(t *testing.T) {
 	}
 	var canTemp bool
 	if err := d.Admin.QueryRow(ctx,
-		"select has_database_privilege('telflo_opamp', current_database(), 'TEMPORARY')").Scan(&canTemp); err != nil || !canTemp {
+		"select has_database_privilege('telflo_opamp_server', current_database(), 'TEMPORARY')").Scan(&canTemp); err != nil || !canTemp {
 		t.Fatalf("has_database_privilege = %v, %v; want the server's role to see it through PUBLIC", canTemp, err)
 	}
 }
@@ -1771,9 +1771,9 @@ func TestPrivilegeCheckSeesTemporaryGrantedToPublic(t *testing.T) {
 // must see.
 func TestPrivilegeCheckSeesAGrantedUpdate(t *testing.T) {
 	for _, c := range []struct{ grant, want string }{
-		{"grant update on telflo_opamp.publications to telflo_opamp_runtime", "relation telflo_opamp.publications UPDATE"},
-		{"grant update on telflo_opamp.enrollment_token_events to telflo_opamp_runtime", "relation telflo_opamp.enrollment_token_events UPDATE"},
-		{"grant delete on telflo_opamp.enrollment_tokens to telflo_opamp_runtime", "relation telflo_opamp.enrollment_tokens DELETE"},
+		{"grant update on opamp_server.publications to telflo_opamp_server_runtime", "relation opamp_server.publications UPDATE"},
+		{"grant update on opamp_server.enrollment_token_events to telflo_opamp_server_runtime", "relation opamp_server.enrollment_token_events UPDATE"},
+		{"grant delete on opamp_server.enrollment_tokens to telflo_opamp_server_runtime", "relation opamp_server.enrollment_tokens DELETE"},
 	} {
 		t.Run(c.want, func(t *testing.T) {
 			d := databasetest.New(t, testDatabase)
@@ -1803,11 +1803,11 @@ func TestPrivilegeCheckSeesAGrantedColumnUpdate(t *testing.T) {
 			d := databasetest.New(t, testDatabase)
 			table, name, _ := strings.Cut(column, ".")
 			if _, err := d.Admin.Exec(context.Background(),
-				"grant update ("+name+") on telflo_opamp."+table+" to telflo_opamp_runtime"); err != nil {
+				"grant update ("+name+") on opamp_server."+table+" to telflo_opamp_server_runtime"); err != nil {
 				t.Fatal(err)
 			}
 			got := runtimeGrants(t, d.Admin, database.RuntimeRole)
-			want := "column telflo_opamp." + column + " UPDATE"
+			want := "column opamp_server." + column + " UPDATE"
 			if sameGrants(got, wantRuntimeGrants) || !slices.Contains(got, want) {
 				t.Fatalf("the check saw %v, want %q among them", got, want)
 			}
@@ -1818,10 +1818,10 @@ func TestPrivilegeCheckSeesAGrantedColumnUpdate(t *testing.T) {
 func TestStartupChecksPassAsTheServerRoleOnACurrentSchema(t *testing.T) {
 	d := databasetest.New(t, testDatabase)
 	if err := database.CheckNoImportsTable(context.Background(), d.Runtime); err != nil {
-		t.Fatalf("CheckNoImportsTable as telflo_opamp: %v", err)
+		t.Fatalf("CheckNoImportsTable as telflo_opamp_server: %v", err)
 	}
 	if err := database.CheckStartup(context.Background(), d.Runtime); err != nil {
-		t.Fatalf("CheckStartup as telflo_opamp: %v", err)
+		t.Fatalf("CheckStartup as telflo_opamp_server: %v", err)
 	}
 }
 
@@ -1848,19 +1848,19 @@ func importsTableDatabase(t *testing.T, recorded int64) (*databasetest.Databases
 		t.Fatal(err)
 	}
 	statements := []string{`
-		create table telflo_opamp.imports (
+		create table opamp_server.imports (
 		  id               uuid  primary key,
 		  organization_id  uuid  not null,
 		  fleet_id         uuid  not null,
 		  constraint fk_imports_fleet
 		    foreign key (organization_id, fleet_id)
-		    references telflo_opamp.fleets (organization_id, id) on delete cascade
+		    references opamp_server.fleets (organization_id, id) on delete cascade
 		)`,
-		"grant select, insert on telflo_opamp.imports to telflo_opamp_runtime",
+		"grant select, insert on opamp_server.imports to telflo_opamp_server_runtime",
 	}
 	for v := upTo + 1; v <= recorded; v++ {
 		statements = append(statements, fmt.Sprintf(
-			"insert into telflo_opamp.goose_db_version (version_id, is_applied) values (%d, true)", v))
+			"insert into opamp_server.goose_db_version (version_id, is_applied) values (%d, true)", v))
 	}
 	for _, statement := range statements {
 		if _, err := d.Owner.Exec(ctx, statement); err != nil {
@@ -1876,7 +1876,7 @@ func assertNoAnnotations(t *testing.T, pool *pgxpool.Pool) {
 	var exists bool
 	if err := pool.QueryRow(context.Background(), `
 		select exists (select 1 from information_schema.columns
-		  where table_schema = 'telflo_opamp' and table_name = 'collector_groups'
+		  where table_schema = 'opamp_server' and table_name = 'collector_groups'
 		    and column_name = 'annotations')`).Scan(&exists); err != nil {
 		t.Fatal(err)
 	}
@@ -1899,7 +1899,7 @@ func TestAPreD16cDatabaseIsRefusedByMigrateUpAndServe(t *testing.T) {
 		t.Fatalf("CheckStartup() before migrate up = %v, want %q", err, database.ImportsTableRefusal)
 	}
 	results, err := migrator.Up(ctx)
-	const want = `this database holds the old imports table (telflo_opamp.imports): recreate it (see the opamp-server README, "A database holding the old imports table")`
+	const want = `this database holds the old imports table (opamp_server.imports): recreate it (see the opamp-server README, "A database holding the old imports table")`
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("up = %v (applied %v), want the refusal %q", err, appliedVersions(results), want)
 	}
@@ -1921,7 +1921,7 @@ func TestAPreD16cDatabaseAtTheOldNineIsRefusedUntouched(t *testing.T) {
 	ctx := context.Background()
 
 	results, err := migrator.Up(ctx)
-	const want = `this database holds the old imports table (telflo_opamp.imports): recreate it (see the opamp-server README, "A database holding the old imports table")`
+	const want = `this database holds the old imports table (opamp_server.imports): recreate it (see the opamp-server README, "A database holding the old imports table")`
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("up = %v (applied %v), want the refusal %q", err, appliedVersions(results), want)
 	}
@@ -1932,7 +1932,7 @@ func TestAPreD16cDatabaseAtTheOldNineIsRefusedUntouched(t *testing.T) {
 	assertNoAnnotations(t, d.Owner)
 	var indexes []string
 	rows, err := d.Owner.Query(ctx, `select indexname from pg_indexes
-		where schemaname = 'telflo_opamp' and tablename = 'enrollment_tokens'
+		where schemaname = 'opamp_server' and tablename = 'enrollment_tokens'
 		  and indexname like 'uq_enrollment_tokens_fleet_id_where_%' order by 1`)
 	if err != nil {
 		t.Fatal(err)
@@ -1975,7 +1975,7 @@ func TestSchemaVersionCountsOnlyAppliedRows(t *testing.T) {
 	ctx := context.Background()
 	latest := latestMigration(t)
 	if _, err := d.Owner.Exec(ctx,
-		"insert into telflo_opamp.goose_db_version (version_id, is_applied) values ($1, false)", latest+1); err != nil {
+		"insert into opamp_server.goose_db_version (version_id, is_applied) values ($1, false)", latest+1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2003,7 +2003,7 @@ func TestCheckRoleRefusesARoleWithoutTheRuntimeRolesPrivileges(t *testing.T) {
 	defer pool.Close()
 
 	err = database.CheckRole(ctx, pool)
-	want := `Refusing to start: the database role "` + name + `" doesn't inherit telflo_opamp_runtime's privileges.`
+	want := `Refusing to start: the database role "` + name + `" doesn't inherit telflo_opamp_server_runtime's privileges.`
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Fatalf("CheckRole() = %v, want it to start %q", err, want)
 	}
@@ -2017,13 +2017,13 @@ func TestCheckRoleRefusesARoleThatMayCreateInTheDatabaseOrTheSchema(t *testing.T
 	}{
 		{"create on the database", "grant create on database {database} to {role}", "revoke create on database {database} from {role}",
 			"may create objects in the database"},
-		{"create on the schema", "grant create on schema telflo_opamp to {role}", "revoke create on schema telflo_opamp from {role}",
-			"may create objects in the telflo_opamp schema"},
-		{"create on the schema, through PUBLIC", "grant create on schema telflo_opamp to public", "revoke create on schema telflo_opamp from public",
-			"may create objects in the telflo_opamp schema"},
-		{"both", "grant create on database {database} to {role}; grant create on schema telflo_opamp to {role}",
-			"revoke create on database {database} from {role}; revoke create on schema telflo_opamp from {role}",
-			"may create objects in the database and in the telflo_opamp schema"},
+		{"create on the schema", "grant create on schema opamp_server to {role}", "revoke create on schema opamp_server from {role}",
+			"may create objects in the opamp_server schema"},
+		{"create on the schema, through PUBLIC", "grant create on schema opamp_server to public", "revoke create on schema opamp_server from public",
+			"may create objects in the opamp_server schema"},
+		{"both", "grant create on database {database} to {role}; grant create on schema opamp_server to {role}",
+			"revoke create on database {database} from {role}; revoke create on schema opamp_server from {role}",
+			"may create objects in the database and in the opamp_server schema"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -2031,7 +2031,7 @@ func TestCheckRoleRefusesARoleThatMayCreateInTheDatabaseOrTheSchema(t *testing.T
 			ctx := context.Background()
 			// Otherwise a role serve would accept: only the grant refuses it.
 			name, roleURL := d.ThrowawayRole(t, "nosuperuser nobypassrls")
-			if _, err := d.Admin.Exec(ctx, "grant telflo_opamp_runtime to "+name+" with inherit true"); err != nil {
+			if _, err := d.Admin.Exec(ctx, "grant telflo_opamp_server_runtime to "+name+" with inherit true"); err != nil {
 				t.Fatal(err)
 			}
 			pool, err := database.OpenPool(ctx, roleURL)
@@ -2069,7 +2069,7 @@ func TestCheckRoleRefusesARoleThatMayCreateInTheDatabaseOrTheSchema(t *testing.T
 func TestCheckStartupRefusesADatabaseThatIsNotUTF8(t *testing.T) {
 	d := databasetest.New(t, testDatabase)
 	ctx := context.Background()
-	const asciiDatabase = "telflo_opamp_database_ascii_test"
+	const asciiDatabase = "telflo_opamp_server_database_ascii_test"
 	if err := databasetest.CheckName(asciiDatabase); err != nil {
 		t.Fatal(err)
 	}
@@ -2086,8 +2086,8 @@ func TestCheckStartupRefusesADatabaseThatIsNotUTF8(t *testing.T) {
 		}
 	})
 	for _, statement := range []string{
-		"create database " + asciiDatabase + " owner telflo_opamp_owner encoding 'SQL_ASCII' locale 'C' template template0",
-		"grant connect on database " + asciiDatabase + " to telflo_opamp",
+		"create database " + asciiDatabase + " owner telflo_opamp_server_owner encoding 'SQL_ASCII' locale 'C' template template0",
+		"grant connect on database " + asciiDatabase + " to telflo_opamp_server",
 	} {
 		if _, err := d.Admin.Exec(ctx, statement); err != nil {
 			t.Fatal(err)
@@ -2118,9 +2118,9 @@ func TestCheckStartupRefusesADatabaseThatIsNotUTF8(t *testing.T) {
 }
 
 // shapedRole is a throwaway login role serve would accept, as bootstrap.sql
-// shapes telflo_opamp: no attribute but LOGIN, a member of
-// telflo_opamp_runtime with inheritance, its errors terse. attributes add
-// only what a test is about. The shared telflo_opamp is never altered:
+// shapes telflo_opamp_server: no attribute but LOGIN, a member of
+// telflo_opamp_server_runtime with inheritance, its errors terse. attributes add
+// only what a test is about. The shared telflo_opamp_server is never altered:
 // other packages' tests use it at the same time. The pool is closed before
 // the role is dropped.
 func shapedRole(t *testing.T, d *databasetest.Databases, attributes string) (string, *pgxpool.Pool) {
@@ -2128,7 +2128,7 @@ func shapedRole(t *testing.T, d *databasetest.Databases, attributes string) (str
 	ctx := context.Background()
 	name, roleURL := d.ThrowawayRole(t, "nosuperuser nobypassrls "+attributes)
 	for _, statement := range []string{
-		"grant telflo_opamp_runtime to " + name + " with inherit true",
+		"grant telflo_opamp_server_runtime to " + name + " with inherit true",
 		"alter role " + name + " set log_error_verbosity = 'terse'",
 	} {
 		if _, err := d.Admin.Exec(ctx, statement); err != nil {
@@ -2268,10 +2268,10 @@ func assertTableExists(t *testing.T, pool *pgxpool.Pool, table string, want bool
 	t.Helper()
 	var exists bool
 	if err := pool.QueryRow(context.Background(),
-		"select to_regclass('telflo_opamp.' || $1) is not null", table).Scan(&exists); err != nil {
+		"select to_regclass('opamp_server.' || $1) is not null", table).Scan(&exists); err != nil {
 		t.Fatal(err)
 	}
 	if exists != want {
-		t.Fatalf("telflo_opamp.%s exists = %v, want %v", table, exists, want)
+		t.Fatalf("opamp_server.%s exists = %v, want %v", table, exists, want)
 	}
 }

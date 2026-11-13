@@ -61,7 +61,7 @@ func TestReadyPingsOnItsOwnConnectionNotTheRequestPools(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = lock.Rollback(context.Background()) }()
-	if _, err := lock.Exec(context.Background(), "lock table telflo_opamp.organizations in access exclusive mode"); err != nil {
+	if _, err := lock.Exec(context.Background(), "lock table opamp_server.organizations in access exclusive mode"); err != nil {
 		t.Fatal(err)
 	}
 	read := make(chan int, 1)

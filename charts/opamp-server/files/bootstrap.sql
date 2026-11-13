@@ -5,7 +5,7 @@
 -- `opamp-server migrate up`, with the two passwords in the environment:
 --
 --   OPAMP_OWNER_PASSWORD=… OPAMP_RUNTIME_PASSWORD=… \
---     psql -v ON_ERROR_STOP=1 [-v database=telflo_opamp] -f deploy/bootstrap.sql
+--     psql -v ON_ERROR_STOP=1 [-v database=telflo_opamp_server] -f deploy/bootstrap.sql
 --
 -- (through `docker exec`, pass them with `-e OPAMP_OWNER_PASSWORD -e
 -- OPAMP_RUNTIME_PASSWORD`, which copies each value from docker's own
@@ -26,14 +26,16 @@
 -- nothing but the two passwords, which it sets again from the environment.
 --
 -- The three roles:
---   telflo_opamp_owner    logs in; owns the database, the schema and every
---                         table; `opamp-server migrate` runs as it.
---   telflo_opamp_runtime  NOLOGIN; the migrations grant it exactly what the
---                         server needs, and nothing more.
---   telflo_opamp          logs in; `opamp-server serve` runs as it. A member
---                         of telflo_opamp_runtime, with no DDL rights.
+--   telflo_opamp_server_owner    logs in; owns the database, the schema
+--                                and every table; `opamp-server migrate`
+--                                runs as it.
+--   telflo_opamp_server_runtime  NOLOGIN; the migrations grant it exactly
+--                                what the server needs, and nothing more.
+--   telflo_opamp_server          logs in; `opamp-server serve` runs as it.
+--                                A member of telflo_opamp_server_runtime,
+--                                with no DDL rights.
 -- Self-hosters may have the server log in under another name, as long as it
--- is a member of telflo_opamp_runtime.
+-- is a member of telflo_opamp_server_runtime.
 --
 -- The passwords reach Postgres in `create role` and `alter role` statements,
 -- which take no bind parameters, and in the emptiness check below: a server
@@ -75,10 +77,10 @@ select :'owner_password' = '' as owner_password_empty,
   do $$ begin raise exception 'bootstrap.sql needs OPAMP_RUNTIME_PASSWORD to be non-empty'; end $$;
 \endif
 
--- The database's name defaults to telflo_opamp.
+-- The database's name defaults to telflo_opamp_server.
 \if :{?database}
 \else
-  \set database telflo_opamp
+  \set database telflo_opamp_server
 \endif
 
 -- The roles. Created only when missing (roles belong to the whole server,
@@ -86,19 +88,19 @@ select :'owner_password' = '' as owner_password_empty,
 -- substitute variables inside a DO block. The attributes say what each role
 -- may not do, rather than rely on Postgres's defaults.
 select format(
-         'create role telflo_opamp_owner login nosuperuser nocreatedb nocreaterole nobypassrls password %L',
+         'create role telflo_opamp_server_owner login nosuperuser nocreatedb nocreaterole nobypassrls password %L',
          :'owner_password')
- where not exists (select 1 from pg_roles where rolname = 'telflo_opamp_owner')
+ where not exists (select 1 from pg_roles where rolname = 'telflo_opamp_server_owner')
 \gexec
 
-select 'create role telflo_opamp_runtime nologin nosuperuser nocreatedb nocreaterole nobypassrls'
- where not exists (select 1 from pg_roles where rolname = 'telflo_opamp_runtime')
+select 'create role telflo_opamp_server_runtime nologin nosuperuser nocreatedb nocreaterole nobypassrls'
+ where not exists (select 1 from pg_roles where rolname = 'telflo_opamp_server_runtime')
 \gexec
 
 select format(
-         'create role telflo_opamp login nosuperuser nocreatedb nocreaterole nobypassrls inherit password %L',
+         'create role telflo_opamp_server login nosuperuser nocreatedb nocreaterole nobypassrls inherit password %L',
          :'runtime_password')
- where not exists (select 1 from pg_roles where rolname = 'telflo_opamp')
+ where not exists (select 1 from pg_roles where rolname = 'telflo_opamp_server')
 \gexec
 
 -- Every run sets the passwords again, so rotating one is a rerun with a new
@@ -106,14 +108,14 @@ select format(
 -- refuses a superuser or a role with BYPASSRLS, CREATEDB or CREATEROLE, and
 -- a rerun puts a role that was changed by hand back into this script's
 -- shape.
-alter role telflo_opamp_owner password :'owner_password';
-alter role telflo_opamp login nosuperuser nocreatedb nocreaterole nobypassrls inherit
+alter role telflo_opamp_server_owner password :'owner_password';
+alter role telflo_opamp_server login nosuperuser nocreatedb nocreaterole nobypassrls inherit
   password :'runtime_password';
 
 -- The server's role gets the runtime role's privileges through membership,
 -- inherited (stated: since Postgres 16 inheritance is set per grant). A
 -- repeated grant only updates the existing one.
-grant telflo_opamp_runtime to telflo_opamp with inherit true;
+grant telflo_opamp_server_runtime to telflo_opamp_server with inherit true;
 
 -- The database, owned by the owner role, so migrations can create the schema
 -- in it without any superuser right. Its encoding is UTF8 whatever the
@@ -123,20 +125,20 @@ grant telflo_opamp_runtime to telflo_opamp with inherit true;
 -- UTF8 (a LATIN1 locale, say), and such a server needs the database made by
 -- hand first, with `encoding 'UTF8' locale '<a UTF-8 locale, or C>'
 -- template template0`, which this script then keeps.
-select format('create database %I owner telflo_opamp_owner encoding %L template template0', :'database', 'UTF8')
+select format('create database %I owner telflo_opamp_server_owner encoding %L template template0', :'database', 'UTF8')
  where not exists (select 1 from pg_database where datname = :'database')
 \gexec
 
 -- An existing database (created by hand, or by an older run) is handed to
 -- the owner role too. A no-op when it already owns it.
-alter database :"database" owner to telflo_opamp_owner;
+alter database :"database" owner to telflo_opamp_server_owner;
 
 -- No other role on the server can connect to this database
 -- (docs/decisions/0001-reached-only-through-its-api.md): every role may
 -- connect to a new database until PUBLIC's CONNECT is revoked, and then only
 -- the two login roles here are let back in.
 revoke connect on database :"database" from public;
-grant connect on database :"database" to telflo_opamp_owner, telflo_opamp;
+grant connect on database :"database" to telflo_opamp_server_owner, telflo_opamp_server;
 
 -- Nor may every role make temporary tables in it, which PUBLIC may in a new
 -- database: the server needs none, and it runs no DDL. The owner
@@ -144,9 +146,9 @@ grant connect on database :"database" to telflo_opamp_owner, telflo_opamp;
 revoke temporary on database :"database" from public;
 
 -- The server's role finds the opamp-server's tables first. Every statement
--- in the code names the schema anyway (telflo_opamp.publications); this only
+-- in the code names the schema anyway (opamp_server.publications); this only
 -- keeps a stray unqualified name from resolving into `public`.
-alter role telflo_opamp in database :"database" set search_path = telflo_opamp;
+alter role telflo_opamp_server in database :"database" set search_path = opamp_server;
 
 -- The server's role's errors reach Postgres's own server log terse: without
 -- DETAIL, HINT, QUERY or CONTEXT. A unique key's violation
@@ -163,4 +165,4 @@ alter role telflo_opamp in database :"database" set search_path = telflo_opamp;
 -- for the role everywhere (like the role itself), and every run sets it
 -- again. A self-hoster whose server logs in under another name sets it for
 -- that role too. serve refuses to start unless it is terse.
-alter role telflo_opamp set log_error_verbosity = 'terse';
+alter role telflo_opamp_server set log_error_verbosity = 'terse';

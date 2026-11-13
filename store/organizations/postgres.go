@@ -14,8 +14,8 @@ import (
 	"github.com/telflo/opamp-server/telemetry"
 )
 
-// Postgres is the Store `serve` uses, on telflo_opamp.organizations, as
-// telflo_opamp (select, insert, delete, and update on name and updated_at
+// Postgres is the Store `serve` uses, on opamp_server.organizations, as
+// telflo_opamp_server (select, insert, delete, and update on name and updated_at
 // only). Every statement names the schema, and every query filters on the
 // organization's id first.
 //
@@ -68,7 +68,7 @@ func (s *Postgres) Create(ctx context.Context, o Organization) (result CreateRes
 	o = o.normalized()
 
 	rows, err := s.pool.Query(ctx, `
-		insert into telflo_opamp.organizations (`+columns+`, variables_revision, generation)
+		insert into opamp_server.organizations (`+columns+`, variables_revision, generation)
 		values ($1, $2, $3, $4, 0, $5)
 		on conflict (id) do nothing
 		returning `+columns,
@@ -111,7 +111,7 @@ func (s *Postgres) Get(ctx context.Context, id uuid.UUID) (o Organization, err e
 func (s *Postgres) get(ctx context.Context, id uuid.UUID) (Organization, error) {
 	rows, err := s.pool.Query(ctx, `
 		select `+columns+`
-		  from telflo_opamp.organizations
+		  from opamp_server.organizations
 		 where id = $1`,
 		id)
 	if err != nil {
@@ -129,7 +129,7 @@ func (s *Postgres) Exists(ctx context.Context, id uuid.UUID) (exists bool, err e
 	ctx, end := telemetry.StartDBSpan(ctx, "organizations.exists")
 	defer func() { end(err) }()
 	if err := s.pool.QueryRow(ctx, `
-		select exists (select 1 from telflo_opamp.organizations where id = $1)`,
+		select exists (select 1 from opamp_server.organizations where id = $1)`,
 		id).Scan(&exists); err != nil {
 		return false, fmt.Errorf("organizations: exists: %w", err)
 	}
@@ -142,7 +142,7 @@ func (s *Postgres) Rename(ctx context.Context, id uuid.UUID, name string, at tim
 	ctx, end := telemetry.StartDBSpan(ctx, "organizations.rename")
 	defer func() { end(answerOrFailure(err)) }()
 	rows, err := s.pool.Query(ctx, `
-		update telflo_opamp.organizations
+		update opamp_server.organizations
 		   set name = $2,
 		       updated_at = case when name = $2 then updated_at else $3 end
 		 where id = $1
@@ -190,7 +190,7 @@ func (s *Postgres) delete(ctx context.Context, id uuid.UUID) (deleted bool, err 
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
 			select 1
-			  from telflo_opamp.organizations
+			  from opamp_server.organizations
 			 where id = $1
 			   for update`,
 			id).Scan(new(int))
@@ -202,7 +202,7 @@ func (s *Postgres) delete(ctx context.Context, id uuid.UUID) (deleted bool, err 
 		}
 		if _, err := tx.Exec(ctx, `
 			select 1
-			  from telflo_opamp.collector_instances
+			  from opamp_server.collector_instances
 			 where organization_id = $1
 			 order by id
 			   for update`,
@@ -210,7 +210,7 @@ func (s *Postgres) delete(ctx context.Context, id uuid.UUID) (deleted bool, err 
 			return err
 		}
 		tag, err := tx.Exec(ctx, `
-			delete from telflo_opamp.organizations
+			delete from opamp_server.organizations
 			 where id = $1`,
 			id)
 		deleted = tag.RowsAffected() == 1
@@ -231,7 +231,7 @@ func (s *Postgres) Limits(ctx context.Context, id uuid.UUID) (l Limits, err erro
 	defer func() { end(answerOrFailure(err)) }()
 	err = s.pool.QueryRow(ctx, `
 		select max_collectors, requests_per_minute
-		  from telflo_opamp.organizations
+		  from opamp_server.organizations
 		 where id = $1`,
 		id).Scan(&l.MaxCollectors, &l.RequestsPerMinute)
 	switch {
@@ -252,7 +252,7 @@ func (s *Postgres) SetLimits(ctx context.Context, id uuid.UUID, limits Limits) (
 	ctx, end := telemetry.StartDBSpan(ctx, "organizations.set_limits")
 	defer func() { end(answerOrFailure(err)) }()
 	err = s.pool.QueryRow(ctx, `
-		update telflo_opamp.organizations
+		update opamp_server.organizations
 		   set max_collectors = $2,
 		       requests_per_minute = $3
 		 where id = $1

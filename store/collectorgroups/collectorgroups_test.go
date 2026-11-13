@@ -22,7 +22,7 @@ import (
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests").
-const testDatabase = "telflo_opamp_collectorgroups_test"
+const testDatabase = "telflo_opamp_server_collectorgroups_test"
 
 var ctx = context.Background()
 
@@ -434,7 +434,7 @@ func TestAGroupsDeleteRacingItsFleetsDeleteDoesNotDeadlock(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = blocker.Rollback(ctx) }()
-		if _, err := blocker.Exec(ctx, `select 1 from telflo_opamp.collector_instances
+		if _, err := blocker.Exec(ctx, `select 1 from opamp_server.collector_instances
 			where organization_id = $1 and id = $2 for update`, OrgA, collector); err != nil {
 			t.Fatal(err)
 		}
@@ -490,7 +490,7 @@ func TestAnUpdateWithoutARenameDoesNotWaitForAnEnrollment(t *testing.T) {
 		}
 		defer func() { _ = enrollment.Rollback(ctx) }()
 		if _, err := enrollment.Exec(ctx, `
-			insert into telflo_opamp.collector_instances (id, organization_id, fleet_id, collector_group_id,
+			insert into opamp_server.collector_instances (id, organization_id, fleet_id, collector_group_id,
 			  instance_uid, name, last_seen_at, created_at, updated_at)
 			values ($1, $2, $3, $4, $5, 'edge-01', $6, $6, $6)`,
 			uuid.New(), OrgA, c.Fleet.ID, g.ID, uuid.New(), Millisecond(Now)); err != nil {
@@ -654,7 +654,7 @@ func TestAnnotationsWithLineSeparatorsAtTheCanonicalBoundAreAlikeInBothStores(t 
 			t.Fatalf("at the canonical bound: Get = %.40s, %v", got.Annotations, err)
 		}
 		var jsonbBytes int
-		if err := s.Databases.Owner.QueryRow(ctx, `select octet_length(annotations::text) from telflo_opamp.collector_groups
+		if err := s.Databases.Owner.QueryRow(ctx, `select octet_length(annotations::text) from opamp_server.collector_groups
 			where organization_id = $1 and id = $2`, OrgA, c.DefaultGroupID).Scan(&jsonbBytes); err != nil || jsonbBytes != 8+1+3000+(collectorgroups.MaxAnnotationsBytes-8-6000) {
 			t.Fatalf("Postgres counts %d, %v; want jsonb's text of the raw characters", jsonbBytes, err)
 		}
@@ -669,7 +669,7 @@ func TestAStoredRowTheTableAdmittedReadsBack(t *testing.T) {
 	Each(t, testDatabase, func(t *testing.T, s *Stores) {
 		c := s.CreateFleet(t, OrgA, "edge-prod", fleets.TypeServer)
 		stored := `{"z": "` + strings.Repeat("\u2028", 3000) + `"}`
-		if _, err := s.Databases.Owner.Exec(ctx, `update telflo_opamp.collector_groups set annotations = $3::jsonb
+		if _, err := s.Databases.Owner.Exec(ctx, `update opamp_server.collector_groups set annotations = $3::jsonb
 			where organization_id = $1 and id = $2`, OrgA, c.DefaultGroupID, stored); err != nil {
 			t.Fatalf("the table refused the row: %v", err)
 		}
@@ -792,7 +792,7 @@ func TestAnnotationsAtTheJSONBBoundAreAlikeInBothStores(t *testing.T) {
 				t.Fatalf("U+2028 at %d: Get = %.40s, %v", length, got.Annotations, err)
 			}
 			var stored int
-			if err := s.Databases.Owner.QueryRow(ctx, `select octet_length(annotations::text) from telflo_opamp.collector_groups
+			if err := s.Databases.Owner.QueryRow(ctx, `select octet_length(annotations::text) from opamp_server.collector_groups
 				where organization_id = $1 and id = $2`, OrgA, c.DefaultGroupID).Scan(&stored); err != nil || stored != length {
 				t.Fatalf("U+2028 at %d: the stored row's jsonb text is %d, %v", length, stored, err)
 			}
@@ -852,7 +852,7 @@ func variableGroup(t *testing.T, s *Stores, org uuid.UUID, name string) uuid.UUI
 func revision(t *testing.T, s *Stores, org uuid.UUID) int64 {
 	t.Helper()
 	var r int64
-	if err := s.Databases.Owner.QueryRow(ctx, `select variables_revision from telflo_opamp.organizations where id = $1`,
+	if err := s.Databases.Owner.QueryRow(ctx, `select variables_revision from opamp_server.organizations where id = $1`,
 		org).Scan(&r); err != nil {
 		t.Fatal(err)
 	}
@@ -1107,7 +1107,7 @@ func TestAnAssignmentWithEveryNameDefinedPasses(t *testing.T) {
 // only a test can.
 func assignPastTheCheck(t *testing.T, s *Stores, groupID, publicationID uuid.UUID) {
 	t.Helper()
-	if _, err := s.Databases.Owner.Exec(ctx, `update telflo_opamp.collector_groups set assigned_publication_id = $2
+	if _, err := s.Databases.Owner.Exec(ctx, `update opamp_server.collector_groups set assigned_publication_id = $2
 		where id = $1`, groupID, publicationID); err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@
 #
 # Usage: scripts/check-bootstrap.sh [database]
 #
-#   database  the database bootstrap.sql creates; defaults to telflo_opamp.
+#   database  the database bootstrap.sql creates; defaults to telflo_opamp_server.
 #             A name ending in `_test` is a throwaway: the script drops it
 #             when it exits, whether the check passed or failed. Any other
 #             database is left in place, never dropped. The roles are
@@ -38,7 +38,7 @@
 # failed or a throwaway database couldn't be dropped.
 set -euo pipefail
 
-database=${1:-telflo_opamp}
+database=${1:-telflo_opamp_server}
 read -r -a psql <<<"${PSQL:-psql}"
 service_dir=$(cd "$(dirname "$0")/.." && pwd)
 bootstrap="$service_dir/deploy/bootstrap.sql"
@@ -102,13 +102,13 @@ catalog() {
 select 'role', rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin,
        rolreplication, rolbypassrls, rolconnlimit, rolvaliduntil
   from pg_roles
- where rolname in ('telflo_opamp_owner', 'telflo_opamp_runtime', 'telflo_opamp')
+ where rolname in ('telflo_opamp_server_owner', 'telflo_opamp_server_runtime', 'telflo_opamp_server')
  order by rolname;
 select 'membership', m.roleid::regrole, m.member::regrole, m.grantor::regrole,
        m.admin_option, m.inherit_option, m.set_option
   from pg_auth_members m
- where m.roleid::regrole::text in ('telflo_opamp_owner', 'telflo_opamp_runtime', 'telflo_opamp')
-    or m.member::regrole::text in ('telflo_opamp_owner', 'telflo_opamp_runtime', 'telflo_opamp')
+ where m.roleid::regrole::text in ('telflo_opamp_server_owner', 'telflo_opamp_server_runtime', 'telflo_opamp_server')
+    or m.member::regrole::text in ('telflo_opamp_server_owner', 'telflo_opamp_server_runtime', 'telflo_opamp_server')
  order by 2, 3, 4;
 select 'database', datname, pg_get_userbyid(datdba), pg_encoding_to_char(encoding), datacl
   from pg_database
@@ -121,7 +121,7 @@ select 'setting', coalesce(s.setrole::regrole::text, '(all roles)'), s.setconfig
 select 'role setting', s.setrole::regrole::text, s.setconfig
   from pg_db_role_setting s
  where s.setdatabase = 0
-   and s.setrole::regrole::text in ('telflo_opamp_owner', 'telflo_opamp_runtime', 'telflo_opamp')
+   and s.setrole::regrole::text in ('telflo_opamp_server_owner', 'telflo_opamp_server_runtime', 'telflo_opamp_server')
  order by 2;
 SQL
 }
@@ -148,16 +148,16 @@ sed 's/^/  /' "$work/first"
 # The database is UTF8 whatever the server's default, and
 # PUBLIC holds nothing on it: no CONNECT, no TEMPORARY (an ACL entry for
 # PUBLIC starts with "=").
-if ! grep -q "^database|$database|telflo_opamp_owner|UTF8|" "$work/first"; then
-  echo "ERROR: bootstrap.sql didn't make $database a UTF8 database owned by telflo_opamp_owner." >&2
+if ! grep -q "^database|$database|telflo_opamp_server_owner|UTF8|" "$work/first"; then
+  echo "ERROR: bootstrap.sql didn't make $database a UTF8 database owned by telflo_opamp_server_owner." >&2
   exit 1
 fi
 if grep "^database|" "$work/first" | grep -Eq '[{,]='; then
   echo "ERROR: PUBLIC still holds a privilege on $database." >&2
   exit 1
 fi
-if ! grep "^role setting|telflo_opamp|" "$work/first" | grep -Eq '[{,]log_error_verbosity=terse[,}]'; then
-  echo "ERROR: bootstrap.sql didn't set log_error_verbosity to terse for telflo_opamp." >&2
+if ! grep "^role setting|telflo_opamp_server|" "$work/first" | grep -Eq '[{,]log_error_verbosity=terse[,}]'; then
+  echo "ERROR: bootstrap.sql didn't set log_error_verbosity to terse for opamp_server." >&2
   exit 1
 fi
 if ! diff -u "$work/first" "$work/second"; then

@@ -104,8 +104,8 @@ public, you need neither.
 |---|---|---|
 | `management-secret` | required | the management API (`OPAMP_MANAGEMENT_SECRET`): at least 32 bytes |
 | `encryption-key` | required | both components, as a file (`OPAMP_ENCRYPTION_KEY_FILE`) |
-| `owner-password` | required while the chart builds the URLs | `migrate`, as the schema owner `telflo_opamp_owner`, and the bundled Postgres's bootstrap |
-| `runtime-password` | required while the chart builds the URLs | both components' `serve`, as `telflo_opamp`, and the bundled Postgres's bootstrap |
+| `owner-password` | required while the chart builds the URLs | `migrate`, as the schema owner `telflo_opamp_server_owner`, and the bundled Postgres's bootstrap |
+| `runtime-password` | required while the chart builds the URLs | both components' `serve`, as `telflo_opamp_server`, and the bundled Postgres's bootstrap |
 | `management-secrets-previous` | optional | the management API (`OPAMP_MANAGEMENT_SECRETS_PREVIOUS`), during a rotation |
 | `encryption-keys-previous` | required while `auth.encryptionKeysPrevious.enabled` | both components, as a file (`OPAMP_ENCRYPTION_KEYS_PREVIOUS_FILE`), during a key rotation |
 
@@ -179,13 +179,13 @@ A missing required key stops the pod (`CreateContainerConfigError`).
 | `postgres.image.digest` | `sha256:edb0c08d…` | The `postgres:18` (18.6) index digest. Empty: the tag alone, for an image loaded into the cluster by hand. |
 | `postgres.image.pullPolicy` | `IfNotPresent` | |
 | `postgres.auth.existingSecret` | `""` | **Required while enabled.** Its Secret, with `postgres-password`. |
-| `postgres.database` | `telflo_opamp` | The database the bootstrap creates. |
+| `postgres.database` | `telflo_opamp_server` | The database the bootstrap creates. |
 | `postgres.persistence.size` | `8Gi` | Its volume claim's size (ReadWriteOnce). |
 | `postgres.persistence.storageClassName` | `""` | Empty: the cluster's default storage class. |
 | `postgres.resources`, `postgres.podAnnotations`, `postgres.nodeSelector`, `postgres.tolerations`, `postgres.affinity` | empty | The Postgres pod's resources, annotations and scheduling. |
 | `externalDatabase.host` | `""` | **Required while `postgres.enabled` is false** (unless `urlKeys`): a host name or IP address. |
 | `externalDatabase.port` | `5432` | |
-| `externalDatabase.database` | `telflo_opamp` | |
+| `externalDatabase.database` | `telflo_opamp_server` | |
 | `externalDatabase.sslmode` | `""` | **Required likewise:** libpq's `sslmode` (`disable`, `allow`, `prefer`, `require`, `verify-ca` or `verify-full`). |
 | `externalDatabase.urlKeys.runtime`, `.migration` | `""` | Keys of the server's Secret holding the whole URLs (both, or neither): then the passwords aren't read and the four values above aren't used. |
 
@@ -212,8 +212,8 @@ helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.2.4 -n o
 ```
 
 You don't need the Postgres Secret. The chart builds
-`postgresql://telflo_opamp_owner:…@<host>:<port>/<database>?sslmode=<sslmode>`
-for `migrate`, and the same with `telflo_opamp` for `serve`. For anything
+`postgresql://telflo_opamp_server_owner:…@<host>:<port>/<database>?sslmode=<sslmode>`
+for `migrate`, and the same with `telflo_opamp_server` for `serve`. For anything
 else (another role name, an IPv6 address, or parameters such as
 `pool_max_conns`), put the whole URLs in the Secret and name their keys:
 
@@ -360,7 +360,7 @@ same way at its first start:
   `/opamp-bootstrap` (in the init folder it would also run as a `*.sql`
   file).
 - Give the container `OPAMP_OWNER_PASSWORD`, `OPAMP_RUNTIME_PASSWORD` and,
-  for a database not named `telflo_opamp`, `OPAMP_DATABASE_NAME`.
+  for a database not named `telflo_opamp_server`, `OPAMP_DATABASE_NAME`.
 - Copy the bundled StatefulSet's container `command` too. It holds the
   first-start guard; without it, a failed first bootstrap is never
   retried.

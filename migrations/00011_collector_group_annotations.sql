@@ -14,7 +14,7 @@
 -- edit deleted the imports migration and renumbered the collectors' to 9,
 -- and 00010 reuses that number, so goose finds such a database (at 10: the
 -- old 9, imports, and 10, collectors with import columns) with only this
--- migration pending. Its telflo_opamp.imports table, which no current
+-- migration pending. Its opamp_server.imports table, which no current
 -- migration makes, marks it. Refusing here, in this migration's
 -- transaction, leaves it at 10 (one left at the old 9 is refused by 10's
 -- same guard); `serve` refuses either (store/database CheckStartup).
@@ -25,32 +25,32 @@
 -- +goose StatementBegin
 do $$
 begin
-  if to_regclass('telflo_opamp.imports') is not null then
-    raise exception 'this database holds the old imports table (telflo_opamp.imports): recreate it (see the opamp-server README, "A database holding the old imports table")'
+  if to_regclass('opamp_server.imports') is not null then
+    raise exception 'this database holds the old imports table (opamp_server.imports): recreate it (see the opamp-server README, "A database holding the old imports table")'
       using errcode = 'object_not_in_prerequisite_state';
   end if;
 end
 $$;
 -- +goose StatementEnd
 
-alter table telflo_opamp.collector_groups
+alter table opamp_server.collector_groups
   add column annotations jsonb null,
   add constraint ck_collector_groups_annotations_bounded
     check (annotations is null
            or (jsonb_typeof(annotations) = 'object'
                and octet_length(annotations::text) <= 16384));
 
-comment on column telflo_opamp.collector_groups.annotations is
+comment on column opamp_server.collector_groups.annotations is
   'the management client''s own data about the group, stored and returned
    unchanged; the server never reads it. A JSON object of at most 16 KiB, or
    null, on any fleet''s group. Configuration text (it may hold paths):
    never logged.';
-comment on constraint ck_collector_groups_annotations_bounded on telflo_opamp.collector_groups is
+comment on constraint ck_collector_groups_annotations_bounded on opamp_server.collector_groups is
   'annotations is a JSON object of at most 16 KiB (as jsonb writes it back),
    or null.';
 
-grant update (annotations) on telflo_opamp.collector_groups to telflo_opamp_runtime;
+grant update (annotations) on opamp_server.collector_groups to telflo_opamp_server_runtime;
 
 -- +goose Down
-revoke update (annotations) on telflo_opamp.collector_groups from telflo_opamp_runtime;
-alter table telflo_opamp.collector_groups drop column annotations;
+revoke update (annotations) on opamp_server.collector_groups from telflo_opamp_server_runtime;
+alter table opamp_server.collector_groups drop column annotations;

@@ -371,8 +371,8 @@ func TestServeDestroysTheKeysOnEveryWayOut(t *testing.T) {
 		log  string
 	}{
 		{"a setting refused after the keys", env(d.RuntimeURL, map[string]string{management.PortVariable: "65536"}), false, 1, "OPAMP_MANAGEMENT_PORT"},
-		{"a database URL that doesn't parse", env("postgresql://someone:a-secret@localhost:notaport/telflo_opamp", nil), false, 1, "is not a valid PostgreSQL connection URL"},
-		{"a database that refuses the role", env(d.OwnerURL, nil), false, 1, "is telflo_opamp_owner or a member of it"},
+		{"a database URL that doesn't parse", env("postgresql://someone:a-secret@localhost:notaport/telflo_opamp_server", nil), false, 1, "is not a valid PostgreSQL connection URL"},
+		{"a database that refuses the role", env(d.OwnerURL, nil), false, 1, "is telflo_opamp_server_owner or a member of it"},
 		{"a listener that can't open", env(d.RuntimeURL, map[string]string{management.PortVariable: takenPort}), false, 1, "can't listen on the management port"},
 		{"the agent listener that can't open", env(d.RuntimeURL, map[string]string{agent.PortVariable: takenPort}), false, 1, "can't listen on the agent port"},
 		{"a graceful stop", env(d.RuntimeURL, nil), true, 0, "stopped"},

@@ -41,7 +41,7 @@ func TestParseRoleNamesOneOfThreeRoles(t *testing.T) {
 func TestEachRoleReadsOnlyItsComponentsSettings(t *testing.T) {
 	process := map[string]string{
 		EncryptionKeyVariable: testEncryptionKey,
-		DatabaseURLVariable:   "postgresql://telflo_opamp@db/telflo_opamp",
+		DatabaseURLVariable:   "postgresql://telflo_opamp_server@db/telflo_opamp_server",
 	}
 	with := func(more map[string]string) func(string) string {
 		values := map[string]string{}

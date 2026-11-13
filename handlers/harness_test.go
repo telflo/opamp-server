@@ -31,7 +31,7 @@ import (
 )
 
 // testDatabase is the Postgres tests' database (storetest.Each).
-const testDatabase = "telflo_opamp_handlers_test"
+const testDatabase = "telflo_opamp_server_handlers_test"
 
 // keySetting is the test keyring's current key setting.
 const keySetting = "handlers-test-key-setting-0123456789abcdef"
@@ -247,7 +247,7 @@ func (x *harness) bind(c fleets.Creation, group uuid.UUID, variableGroup *uuid.U
 func (x *harness) forgetNames(publication uuid.UUID) {
 	x.t.Helper()
 	if _, err := x.s.Databases.Owner.Exec(context.Background(), `
-		delete from telflo_opamp.publication_variable_names where publication_id = $1`, publication); err != nil {
+		delete from opamp_server.publication_variable_names where publication_id = $1`, publication); err != nil {
 		x.t.Fatal(err)
 	}
 }
