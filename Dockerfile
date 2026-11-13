@@ -25,15 +25,15 @@
 # superuser runs it with psql, once, before the first `migrate up`.
 
 # ---- build stage ----------------------------------------------------------
-# The Go 1.27 line go.mod names (go 1.27.3), pinned by its index digest:
-# golang:1.27-alpine was Go 1.27.3 on Alpine 3.24 when resolved, on
-# 2026-10-31. To move it, take the new digest from
+# The Go 1.27 line go.mod names (go 1.27.4), pinned by its index digest:
+# golang:1.27-alpine was Go 1.27.4 on Alpine 3.24 when resolved, on
+# 2026-11-13. To move it, take the new digest from
 # `docker buildx imagetools inspect golang:1.27-alpine`.
 # Alpine keeps the build image small; CGO is disabled in the build step so
 # the binary is fully static and runs on distroless/static without libc.
 # --platform=$BUILDPLATFORM: this stage is the builder's platform's, whatever
 # the target.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:eb61c3873c97416fff0116553fff65d67a3549f72e11d9758849a689cdd8b523 AS builder
 
 WORKDIR /src
 
