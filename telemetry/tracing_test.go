@@ -116,7 +116,7 @@ func TestStartDBSpanDescribesAFailureByOperationAndSQLStateOnly(t *testing.T) {
 		},
 		{
 			name:        "any other error",
-			err:         errors.New("publications: put: dial postgres://telflo_opamp:" + marker + "@db/telflo_opamp"),
+			err:         errors.New("publications: put: dial postgres://telflo_opamp_server:" + marker + "@db/telflo_opamp_server"),
 			description: "publications.put failed",
 		},
 	}

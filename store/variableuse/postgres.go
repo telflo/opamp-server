@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The Postgres functions run in the caller's transaction, as telflo_opamp
+// The Postgres functions run in the caller's transaction, as telflo_opamp_server
 // (the runtime role: select on the tables they read, update on
 // organizations.variables_revision). Every statement names the schema and
 // filters on organization_id first. Errors are wrapped with the operation's
@@ -24,7 +24,7 @@ import (
 func LockOrganization(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID) (bool, error) {
 	err := tx.QueryRow(ctx, `
 		select 1
-		  from telflo_opamp.organizations
+		  from opamp_server.organizations
 		 where id = $1
 		   for no key update`,
 		organizationID).Scan(new(int))
@@ -44,7 +44,7 @@ func LockOrganization(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID) 
 func Bump(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID) (int64, error) {
 	var revision int64
 	err := tx.QueryRow(ctx, `
-		update telflo_opamp.organizations
+		update opamp_server.organizations
 		   set variables_revision = variables_revision + 1
 		 where id = $1
 		returning variables_revision`,
@@ -66,11 +66,11 @@ func Bump(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID) (int64, erro
 func Undefined(ctx context.Context, tx pgx.Tx, organizationID, publicationID uuid.UUID) (UndefinedNames, error) {
 	rows, err := tx.Query(ctx, `
 		select n.name, count(*) over ()
-		  from telflo_opamp.publication_variable_names n
+		  from opamp_server.publication_variable_names n
 		 where n.organization_id = $1 and n.publication_id = $2
 		   and not exists (
 		         select 1
-		           from telflo_opamp.variables v
+		           from opamp_server.variables v
 		          where v.organization_id = $1 and v.name = n.name)
 		 order by n.name collate "C"
 		 limit $3`,
@@ -102,12 +102,12 @@ func UsedBy(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID, name strin
 		with used as (
 		  select n.publication_id as id,
 		         (select count(*)
-		            from telflo_opamp.collector_groups g
+		            from opamp_server.collector_groups g
 		           where g.organization_id = $1 and g.assigned_publication_id = n.publication_id) as groups,
 		         (select count(*)
-		            from telflo_opamp.collector_instances c
+		            from opamp_server.collector_instances c
 		           where c.organization_id = $1 and c.pinned_publication_id = n.publication_id) as pinned
-		    from telflo_opamp.publication_variable_names n
+		    from opamp_server.publication_variable_names n
 		   where n.organization_id = $1 and n.name = $2
 		), totals as (
 		  select count(*) filter (where groups > 0 or pinned > 0) as publications,
@@ -120,7 +120,7 @@ func UsedBy(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID, name strin
 		  left join lateral (
 		         select u.id, g.fleet_id, g.id as group_id, u.pinned
 		           from used u
-		           left join telflo_opamp.collector_groups g
+		           left join opamp_server.collector_groups g
 		             on g.organization_id = $1 and g.assigned_publication_id = u.id
 		          where u.groups > 0 or u.pinned > 0
 		          order by u.id, g.fleet_id, g.id
@@ -163,14 +163,14 @@ func GroupUse(ctx context.Context, tx pgx.Tx, organizationID, variableGroupID uu
 	rows, err := tx.Query(ctx, `
 		select t.groups, t.pinned, g.fleet_id, g.id
 		  from (select (select count(*)
-		                  from telflo_opamp.collector_groups g
+		                  from opamp_server.collector_groups g
 		                 where g.organization_id = $1 and g.variable_group_id = $2) as groups,
 		               (select count(*)
-		                  from telflo_opamp.collector_instances c
+		                  from opamp_server.collector_instances c
 		                 where c.organization_id = $1 and c.pinned_variable_group_id = $2) as pinned) t
 		  left join lateral (
 		         select g.fleet_id, g.id
-		           from telflo_opamp.collector_groups g
+		           from opamp_server.collector_groups g
 		          where g.organization_id = $1 and g.variable_group_id = $2
 		          order by g.fleet_id, g.id
 		          limit $3) g on true

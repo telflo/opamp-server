@@ -20,10 +20,10 @@ import (
 
 // This package's own test database: go test ./... runs packages in
 // parallel.
-const testDatabase = "telflo_opamp_management_test"
+const testDatabase = "telflo_opamp_server_management_test"
 
 // postgresServer is a Server over the Postgres stores on a fresh, migrated
-// database, connected as telflo_opamp (what serve connects as), with
+// database, connected as telflo_opamp_server (what serve connects as), with
 // organizations A and B registered.
 func postgresServer(t *testing.T) (*Server, *testClock, *databasetest.Databases) {
 	t.Helper()
@@ -47,7 +47,7 @@ func postgresServerOver(t *testing.T, d *databasetest.Databases, store publicati
 func tableSnapshot(t *testing.T, pool *pgxpool.Pool) []string {
 	t.Helper()
 	rows, err := pool.Query(context.Background(),
-		`select p::text from telflo_opamp.publications p order by id`)
+		`select p::text from opamp_server.publications p order by id`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,9 +72,9 @@ func tableSnapshot(t *testing.T, pool *pgxpool.Pool) []string {
 func organizationSnapshot(t *testing.T, pool *pgxpool.Pool, organizationID string) []string {
 	t.Helper()
 	rows, err := pool.Query(context.Background(), `
-		select p::text from telflo_opamp.publications p where organization_id = $1
+		select p::text from opamp_server.publications p where organization_id = $1
 		union all
-		select o::text from telflo_opamp.organizations o where id = $1
+		select o::text from opamp_server.organizations o where id = $1
 		order by 1`, organizationID)
 	if err != nil {
 		t.Fatal(err)
@@ -185,7 +185,7 @@ func TestReceivedAtIsTheInjectedClocksTime(t *testing.T) {
 
 	var receivedAt time.Time
 	if err := d.Admin.QueryRow(context.Background(),
-		`select received_at from telflo_opamp.publications where organization_id = $1 and id = $2`,
+		`select received_at from opamp_server.publications where organization_id = $1 and id = $2`,
 		orgA, publicationA).Scan(&receivedAt); err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestTwoSimultaneousIdenticalPublicationPostsAreOneCreatedAndOneIdentical(t 
 		t.Fatal(err)
 	}
 	defer func() { _ = lock.Rollback(ctx) }()
-	if _, err := lock.Exec(ctx, "lock table telflo_opamp.publications in share mode"); err != nil {
+	if _, err := lock.Exec(ctx, "lock table opamp_server.publications in share mode"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -230,9 +230,9 @@ func TestTwoSimultaneousIdenticalPublicationPostsAreOneCreatedAndOneIdentical(t 
 		if err := d.Admin.QueryRow(ctx, `
 			select count(*) from pg_stat_activity
 			 where datname = current_database()
-			   and usename = 'telflo_opamp'
+			   and usename = 'telflo_opamp_server'
 			   and wait_event_type = 'Lock'
-			   and query like '%insert into telflo_opamp.publications%'`).Scan(&blocked); err != nil {
+			   and query like '%insert into opamp_server.publications%'`).Scan(&blocked); err != nil {
 			t.Fatal(err)
 		}
 		if blocked < 2 {
@@ -282,7 +282,7 @@ func TestTheConcurrencyTestSeesAReadThenInsertStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = lock.Rollback(ctx) }()
-	if _, err := lock.Exec(ctx, "lock table telflo_opamp.publications in share mode"); err != nil {
+	if _, err := lock.Exec(ctx, "lock table opamp_server.publications in share mode"); err != nil {
 		t.Fatal(err)
 	}
 	payload := validBody(sampleYAML).with("id", publicationA).bytes()
@@ -296,7 +296,7 @@ func TestTheConcurrencyTestSeesAReadThenInsertStore(t *testing.T) {
 	for attempt := 0; attempt < 500 && blocked < 2; attempt++ {
 		if err := d.Admin.QueryRow(ctx, `
 			select count(*) from pg_stat_activity
-			 where datname = current_database() and usename = 'telflo_opamp' and wait_event_type = 'Lock'`).Scan(&blocked); err != nil {
+			 where datname = current_database() and usename = 'telflo_opamp_server' and wait_event_type = 'Lock'`).Scan(&blocked); err != nil {
 			t.Fatal(err)
 		}
 		if blocked < 2 {
@@ -326,7 +326,7 @@ type readThenInsert struct {
 func (r readThenInsert) Put(ctx context.Context, p publications.Publication) (publications.PutResult, publications.Publication, error) {
 	var exists bool
 	if err := r.pool.QueryRow(ctx,
-		`select exists (select 1 from telflo_opamp.publications where id = $1)`, p.ID).Scan(&exists); err != nil {
+		`select exists (select 1 from opamp_server.publications where id = $1)`, p.ID).Scan(&exists); err != nil {
 		return 0, publications.Publication{}, err
 	}
 	if exists {
@@ -338,7 +338,7 @@ func (r readThenInsert) Put(ctx context.Context, p publications.Publication) (pu
 		actorID, actorEmail = &p.PublishedBy.ID, &p.PublishedBy.Email
 	}
 	if _, err := r.pool.Exec(ctx, `
-		insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+		insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
 		  version_id, version_number, version_label, yaml, sha256, published_by_id, published_by_email,
 		  published_at, received_at, collector_distribution, collector_version)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,

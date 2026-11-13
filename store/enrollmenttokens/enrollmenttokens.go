@@ -5,7 +5,7 @@
 //
 // A fleet is made with a default token (enrollment; never expires) and a
 // rotate token (fleets.Store.Create). A Store's implementation is Postgres
-// (what `serve` uses, on telflo_opamp.enrollment_tokens and
+// (what `serve` uses, on opamp_server.enrollment_tokens and
 // enrollment_token_events), and the contract tests hold it to these rules:
 //
 //   - every method but Lookup takes the organization and the fleet (or,

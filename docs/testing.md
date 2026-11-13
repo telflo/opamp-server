@@ -19,9 +19,9 @@ run them offline.
 
 `OPAMP_TEST_ADMIN_DATABASE_URL` is a superuser URL to a Postgres server.
 From it the tests make, for each package, a database named
-`telflo_opamp_<package>_test`, dropped and created again for every test
+`telflo_opamp_server_<package>_test`, dropped and created again for every test
 that needs one, so packages running in parallel never share one. Each is a
-copy of `telflo_opamp_<package>_template_test`, migrated once per run of the
+copy of `telflo_opamp_server_<package>_template_test`, migrated once per run of the
 package's tests, so a test doesn't wait for the migrations. Only a
 database whose name ends in `_test` is ever created or dropped. The three
 roles are created if missing, with the test harness's **development

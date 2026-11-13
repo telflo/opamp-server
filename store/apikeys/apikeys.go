@@ -4,7 +4,7 @@
 // never stored, only the SHA-256 of its secret part.
 //
 // Its implementation is Postgres (what `serve` uses, on
-// telflo_opamp.api_keys and api_key_organizations), and the contract tests
+// opamp_server.api_keys and api_key_organizations), and the contract tests
 // hold it to these rules:
 //
 //   - keys belong to the server, not to an organization: no method takes

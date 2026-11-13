@@ -67,7 +67,7 @@ func deleteRacingAPoll(t *testing.T, s *Stores, del func(fleets.Creation) (bool,
 	// More collectors around it, so the delete's lock walks several rows.
 	enroll(t, s, c, "edge-02", Now)
 	enroll(t, s, c, "edge-03", Now)
-	release := blockOn(t, s, 2, `select 1 from telflo_opamp.collector_instances
+	release := blockOn(t, s, 2, `select 1 from opamp_server.collector_instances
 		where organization_id = $1 and id = $2 for no key update`, OrgA, got.ID)
 
 	var polled collectors.PollResult
@@ -127,17 +127,17 @@ func TestADeleteRefusedForADeadlockRunsAgain(t *testing.T) {
 			lock   string
 			delete func(c fleets.Creation, retries int) (bool, error)
 		}{
-			{"organization", `select 1 from telflo_opamp.organizations where id = $1 for key share`,
+			{"organization", `select 1 from opamp_server.organizations where id = $1 for key share`,
 				func(c fleets.Creation, retries int) (bool, error) {
 					store := organizations.NewPostgres(s.Databases.Runtime, organizations.WithDeadlockRetries(retries))
 					return store.Delete(ctx, c.Fleet.OrganizationID)
 				}},
-			{"fleet", `select 1 from telflo_opamp.fleets where organization_id = $1 and id = $2 for key share`,
+			{"fleet", `select 1 from opamp_server.fleets where organization_id = $1 and id = $2 for key share`,
 				func(c fleets.Creation, retries int) (bool, error) {
 					store := fleets.NewPostgres(s.Databases.Runtime, fleets.WithDeadlockRetries(retries))
 					return store.Delete(ctx, c.Fleet.OrganizationID, c.Fleet.ID)
 				}},
-			{"group", `select 1 from telflo_opamp.collector_groups where organization_id = $1 and id = $2 for key share`,
+			{"group", `select 1 from opamp_server.collector_groups where organization_id = $1 and id = $2 for key share`,
 				func(c fleets.Creation, retries int) (bool, error) {
 					store := collectorgroups.NewPostgres(s.Databases.Runtime, collectorgroups.WithDeadlockRetries(retries))
 					return store.Delete(ctx, c.Fleet.OrganizationID, c.Fleet.ID, group)
@@ -214,7 +214,7 @@ func deleteBesideAThirdSession(t *testing.T, s *Stores, org, collector uuid.UUID
 			t.Fatal(err)
 		}
 	}
-	if _, err := third.Exec(guard, `select 1 from telflo_opamp.collector_instances
+	if _, err := third.Exec(guard, `select 1 from opamp_server.collector_instances
 		where organization_id = $1 and id = $2 for update`, org, collector); err != nil {
 		t.Fatal(err)
 	}

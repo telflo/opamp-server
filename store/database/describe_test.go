@@ -124,7 +124,7 @@ func TestDescribeErrorGivesAnyOtherDatabaseErrorItsSQLStateOnly(t *testing.T) {
 
 	// A connection the server ends with an error of its own: here, a
 	// database that doesn't exist (3D000), which the message names.
-	missing := "telflo_opamp_" + canary(t)
+	missing := "telflo_opamp_server_" + canary(t)
 	err = connectError(t, strings.Replace(d.RuntimeURL, "/"+testDatabase, "/"+missing, 1))
 	assertDescribed(t, err, "the connection to the database failed (SQLSTATE 3D000)", missing, databasetest.RuntimePassword)
 }

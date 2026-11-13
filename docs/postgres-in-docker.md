@@ -77,13 +77,13 @@ until docker exec opamp-postgres pg_isready -h 127.0.0.1 -U postgres -q; do slee
 ## 3. Create opamp-server's database and roles
 
 [`deploy/bootstrap.sql`](../deploy/bootstrap.sql) creates the database
-`telflo_opamp` and three roles. It runs as the superuser, once:
+`telflo_opamp_server` and three roles. It runs as the superuser, once:
 
 | Role | Logs in | What it's for |
 |---|---|---|
-| `telflo_opamp_owner` | yes | Owns the database and every table. `opamp-server migrate` runs as it. |
-| `telflo_opamp_runtime` | no | Holds exactly the rights the running server needs, which the migrations grant it. |
-| `telflo_opamp` | yes | `opamp-server serve` logs in as it. A member of `telflo_opamp_runtime`, so it has those rights and no others. |
+| `telflo_opamp_server_owner` | yes | Owns the database and every table. `opamp-server migrate` runs as it. |
+| `telflo_opamp_server_runtime` | no | Holds exactly the rights the running server needs, which the migrations grant it. |
+| `telflo_opamp_server` | yes | `opamp-server serve` logs in as it. A member of `telflo_opamp_server_runtime`, so it has those rights and no others. |
 
 ```sh
 # The script reads both passwords from its environment, never from arguments.
@@ -98,7 +98,7 @@ docker exec -i -e OPAMP_OWNER_PASSWORD -e OPAMP_RUNTIME_PASSWORD opamp-postgres 
 unset OPAMP_OWNER_PASSWORD OPAMP_RUNTIME_PASSWORD
 
 # See what it made: the three roles, and the database.
-docker exec opamp-postgres psql -U postgres -X -c '\du telflo_opamp*' -c '\l telflo_opamp'
+docker exec opamp-postgres psql -U postgres -X -c '\du telflo_opamp_server*' -c '\l telflo_opamp_server'
 ```
 
 The script is safe to run again: it creates only what's missing, and sets
@@ -114,10 +114,10 @@ Each refuses the other's role.
 
 ```sh
 # The URL migrate uses: the database's owner.
-echo "postgresql://telflo_opamp_owner:$(cat owner-password)@127.0.0.1:5432/telflo_opamp" > migration-database-url
+echo "postgresql://telflo_opamp_server_owner:$(cat owner-password)@127.0.0.1:5432/telflo_opamp_server" > migration-database-url
 
 # The URL serve uses: the server's own role, with at most 10 connections per process.
-echo "postgresql://telflo_opamp:$(cat runtime-password)@127.0.0.1:5432/telflo_opamp?pool_max_conns=10" > database-url
+echo "postgresql://telflo_opamp_server:$(cat runtime-password)@127.0.0.1:5432/telflo_opamp_server?pool_max_conns=10" > database-url
 ```
 
 Now go back to the walkthrough, [step 3](standalone.md#3-make-the-two-secrets).
@@ -130,10 +130,10 @@ docker stop opamp-postgres
 docker start opamp-postgres
 
 # Back up the database to a file. Take one before every `opamp-server migrate up`.
-docker exec opamp-postgres pg_dump -U postgres -Fc telflo_opamp > "telflo_opamp-$(date +%Y%m%d-%H%M%S).dump"
+docker exec opamp-postgres pg_dump -U postgres -Fc telflo_opamp_server > "telflo_opamp_server-$(date +%Y%m%d-%H%M%S).dump"
 
 # Restore a backup over the database, with both components stopped first.
-docker exec -i opamp-postgres pg_restore -U postgres -d telflo_opamp --clean --if-exists --single-transaction < telflo_opamp-YYYYMMDD-HHMMSS.dump
+docker exec -i opamp-postgres pg_restore -U postgres -d telflo_opamp_server --clean --if-exists --single-transaction < telflo_opamp_server-YYYYMMDD-HHMMSS.dump
 ```
 
 A backup is also how you roll back a release: a migration can't be undone

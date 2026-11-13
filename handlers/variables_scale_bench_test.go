@@ -67,7 +67,7 @@ import (
 const ScaleCheckDirVariable = "OPAMP_SCALE_CHECK_DIR"
 
 // scaleDatabase is the check's own database, apart from the package's tests'.
-const scaleDatabase = "telflo_opamp_handlers_scale_test"
+const scaleDatabase = "telflo_opamp_server_handlers_scale_test"
 
 const (
 	scaleCollectors   = 10_000
@@ -425,7 +425,7 @@ func newScaleFixture(b *testing.B, dir string) *scaleFixture {
 	// seen a heartbeat ago from the client's address; then 100 pinned to the
 	// 6th variable group through the store (which stamps them).
 	if _, err := d.Owner.Exec(ctx, `
-		insert into telflo_opamp.collector_instances (id, organization_id, fleet_id, collector_group_id,
+		insert into opamp_server.collector_instances (id, organization_id, fleet_id, collector_group_id,
 		  instance_uid, name, enrollment_token_id, reported_ip, last_seen_at, created_at, updated_at)
 		select gen_random_uuid(), $1, $2, ($3::uuid[])[1 + n % $4], gen_random_uuid(), 'c-' || lpad(n::text, 5, '0'),
 		       $5, $6, $7, $7, $7
@@ -435,7 +435,7 @@ func newScaleFixture(b *testing.B, dir string) *scaleFixture {
 		b.Fatalf("inserting the collectors: %v", err)
 	}
 	rows, err := d.Owner.Query(ctx, `
-		select id, instance_uid from telflo_opamp.collector_instances
+		select id, instance_uid from opamp_server.collector_instances
 		 where organization_id = $1 order by name`, f.org)
 	if err != nil {
 		b.Fatal(err)
@@ -682,9 +682,9 @@ func (f *scaleFixture) pollEach(b *testing.B, each func(c *scaleCollector, recor
 // vacuum is VACUUM ANALYZE of the tables the polls and the counts read.
 func (f *scaleFixture) vacuum(b *testing.B) {
 	b.Helper()
-	if _, err := f.d.Admin.Exec(f.ctx, `vacuum analyze telflo_opamp.collector_instances, telflo_opamp.collector_groups,
-		telflo_opamp.variables, telflo_opamp.variable_group_overrides, telflo_opamp.variable_groups,
-		telflo_opamp.publication_variable_names, telflo_opamp.organizations`); err != nil {
+	if _, err := f.d.Admin.Exec(f.ctx, `vacuum analyze opamp_server.collector_instances, opamp_server.collector_groups,
+		opamp_server.variables, opamp_server.variable_group_overrides, opamp_server.variable_groups,
+		opamp_server.publication_variable_names, opamp_server.organizations`); err != nil {
 		b.Fatal(err)
 	}
 }

@@ -2,7 +2,7 @@
 // snapshots of one version of a configuration, as the platform published it.
 //
 // Its implementation is Postgres (what `serve` uses, on the
-// telflo_opamp.publications table), and the contract tests hold it to these
+// opamp_server.publications table), and the contract tests hold it to these
 // rules:
 //
 //   - every method is scoped to one organization, the opaque tenant key, and

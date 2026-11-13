@@ -32,7 +32,7 @@ import (
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests").
-const testDatabase = "telflo_opamp_variables_test"
+const testDatabase = "telflo_opamp_server_variables_test"
 
 var ctx = context.Background()
 
@@ -110,7 +110,7 @@ func revision(t *testing.T, s *Stores, org uuid.UUID) int64 {
 	t.Helper()
 	var n int64
 	if err := s.Databases.Owner.QueryRow(ctx, `
-		select variables_revision from telflo_opamp.organizations where id = $1`, org).Scan(&n); err != nil {
+		select variables_revision from opamp_server.organizations where id = $1`, org).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -121,7 +121,7 @@ func stampOf(t *testing.T, s *Stores, org, id uuid.UUID) int64 {
 	t.Helper()
 	var n int64
 	if err := s.Databases.Owner.QueryRow(ctx, `
-		select stamp from telflo_opamp.variables where organization_id = $1 and id = $2`, org, id).Scan(&n); err != nil {
+		select stamp from opamp_server.variables where organization_id = $1 and id = $2`, org, id).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -132,7 +132,7 @@ func stampOf(t *testing.T, s *Stores, org, id uuid.UUID) int64 {
 func overrideRow(t *testing.T, s *Stores, org, groupID, variableID uuid.UUID) (value *string, stamp int64, found bool) {
 	t.Helper()
 	err := s.Databases.Owner.QueryRow(ctx, `
-		select value, stamp from telflo_opamp.variable_group_overrides
+		select value, stamp from opamp_server.variable_group_overrides
 		 where organization_id = $1 and variable_group_id = $2 and variable_id = $3`,
 		org, groupID, variableID).Scan(&value, &stamp)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -150,7 +150,7 @@ func overrideRows(t *testing.T, s *Stores, org uuid.UUID) int {
 	t.Helper()
 	n := 0
 	if err := s.Databases.Owner.QueryRow(ctx, `
-		select count(*) from telflo_opamp.variable_group_overrides where organization_id = $1`, org).Scan(&n); err != nil {
+		select count(*) from opamp_server.variable_group_overrides where organization_id = $1`, org).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -161,7 +161,7 @@ func overrideRows(t *testing.T, s *Stores, org uuid.UUID) int {
 func insertVariables(t *testing.T, s *Stores, org uuid.UUID, n int) {
 	t.Helper()
 	if _, err := s.Databases.Owner.Exec(ctx, `
-		insert into telflo_opamp.variables (id, organization_id, name, description, value,
+		insert into opamp_server.variables (id, organization_id, name, description, value,
 		  changed_by_id, changed_by_email, changed_at, stamp)
 		select gen_random_uuid(), $1, 'V_' || g, null, 'v', null, null, $2, 1
 		  from generate_series(1, $3::int) g`, org, Now, n); err != nil {
@@ -174,7 +174,7 @@ func insertVariables(t *testing.T, s *Stores, org uuid.UUID, n int) {
 func insertGroups(t *testing.T, s *Stores, org uuid.UUID, n int) {
 	t.Helper()
 	if _, err := s.Databases.Owner.Exec(ctx, `
-		insert into telflo_opamp.variable_groups (id, organization_id, name, description,
+		insert into opamp_server.variable_groups (id, organization_id, name, description,
 		  changed_by_id, changed_by_email, changed_at)
 		select gen_random_uuid(), $1, 'group ' || g, null, null, null, $2
 		  from generate_series(1, $3::int) g`, org, Now, n); err != nil {
@@ -187,7 +187,7 @@ func insertGroups(t *testing.T, s *Stores, org uuid.UUID, n int) {
 func bindGroup(t *testing.T, s *Stores, org, collectorGroupID, variableGroupID uuid.UUID) {
 	t.Helper()
 	if _, err := s.Databases.Runtime.Exec(ctx, `
-		update telflo_opamp.collector_groups set variable_group_id = $3, variable_group_stamp = 1
+		update opamp_server.collector_groups set variable_group_id = $3, variable_group_stamp = 1
 		 where organization_id = $1 and id = $2`, org, collectorGroupID, variableGroupID); err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func blockOn(t *testing.T, s *Stores, n int, orgs ...uuid.UUID) (release func())
 	t.Cleanup(func() { _ = blocker.Rollback(ctx) })
 	for _, org := range orgs {
 		if _, err := blocker.Exec(ctx, `
-			select 1 from telflo_opamp.organizations where id = $1 for no key update`, org); err != nil {
+			select 1 from opamp_server.organizations where id = $1 for no key update`, org); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1520,7 +1520,7 @@ func TestVariablesStampsEachNameFromTheTopDownToItsSource(t *testing.T) {
 				value string
 			}{{g.ID, c.group, "group-" + c.name}, {p.ID, c.pin, "pin-" + c.name}}
 			if _, err := s.Databases.Owner.Exec(ctx, `
-				insert into telflo_opamp.variables (id, organization_id, name, description, value,
+				insert into opamp_server.variables (id, organization_id, name, description, value,
 				  changed_by_id, changed_by_email, changed_at, stamp)
 				values ($1, $2, $3, null, $4, null, null, $5, $6)`,
 				id, OrgA, c.name, "org-"+c.name, Now, c.stamp); err != nil {
@@ -1535,7 +1535,7 @@ func TestVariablesStampsEachNameFromTheTopDownToItsSource(t *testing.T) {
 					value = Ptr(r.value)
 				}
 				if _, err := s.Databases.Owner.Exec(ctx, `
-					insert into telflo_opamp.variable_group_overrides (organization_id, variable_group_id, variable_id,
+					insert into opamp_server.variable_group_overrides (organization_id, variable_group_id, variable_id,
 					  value, changed_by_id, changed_by_email, changed_at, stamp)
 					values ($1, $2, $3, $4, null, null, $5, $6)`,
 					OrgA, r.group, id, value, Now, r.l.stamp); err != nil {
@@ -1819,7 +1819,7 @@ func TestTheDumpSeesEveryTableOfTheOrganization(t *testing.T) {
 			"variable_group_overrides", "variable_groups", "variables"}
 		rows, err := s.Databases.Owner.Query(ctx, `
 			select relname from pg_class
-			 where relnamespace = 'telflo_opamp'::regnamespace and relkind = 'r'
+			 where relnamespace = 'opamp_server'::regnamespace and relkind = 'r'
 			   and relname not in ('goose_db_version', '`+database.ServerTable+`')
 			 order by 1`)
 		if err != nil {
@@ -1911,7 +1911,7 @@ func TestADeleteGroupRacingABindingPastTheGuardAnswersInUse(t *testing.T) {
 		}
 		t.Cleanup(func() { _ = binder.Rollback(ctx) })
 		if _, err := binder.Exec(ctx, `
-			update telflo_opamp.collector_groups set variable_group_id = $3, variable_group_stamp = 1
+			update opamp_server.collector_groups set variable_group_id = $3, variable_group_stamp = 1
 			 where organization_id = $1 and id = $2`, OrgA, gateways.ID, vg.ID); err != nil {
 			t.Fatal(err)
 		}
@@ -1936,7 +1936,7 @@ func TestADeleteGroupRacingABindingPastTheGuardAnswersInUse(t *testing.T) {
 		}
 		bind := func(groupID uuid.UUID, variableGroupID *uuid.UUID) {
 			if _, err := s.Databases.Owner.Exec(ctx, `
-				update telflo_opamp.collector_groups set variable_group_id = $3
+				update opamp_server.collector_groups set variable_group_id = $3
 				 where organization_id = $1 and id = $2`, OrgA, groupID, variableGroupID); err != nil {
 				t.Error(err)
 			}

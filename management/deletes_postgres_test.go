@@ -47,32 +47,32 @@ func deletesUnderLock() []deleteUnderLock {
 		name:   "an organization's",
 		target: organizationTarget(orgA),
 		// FOR KEY SHARE conflicts with the delete's FOR UPDATE on the row.
-		lock:            `select 1 from telflo_opamp.organizations where id = '` + orgA + `' for key share`,
-		waiting:         `%from telflo_opamp.organizations%for update%`,
-		remains:         `select (select count(*) from telflo_opamp.organizations where id = '` + orgA + `') + (select count(*) from telflo_opamp.fleets where organization_id = '` + orgA + `')`,
+		lock:            `select 1 from opamp_server.organizations where id = '` + orgA + `' for key share`,
+		waiting:         `%from opamp_server.organizations%for update%`,
+		remains:         `select (select count(*) from opamp_server.organizations where id = '` + orgA + `') + (select count(*) from opamp_server.fleets where organization_id = '` + orgA + `')`,
 		notFound:        codeNotFound,
 		notFoundMessage: messageNotFound,
 	}, {
 		name:            "a fleet's",
 		target:          fleetTarget(orgA, fleetA),
-		lock:            `select 1 from telflo_opamp.fleets where organization_id = '` + orgA + `' and id = '` + fleetA + `' for key share`,
-		waiting:         `%from telflo_opamp.fleets%for update%`,
-		remains:         `select (select count(*) from telflo_opamp.fleets where organization_id = '` + orgA + `' and id = '` + fleetA + `') + (select count(*) from telflo_opamp.collector_groups where organization_id = '` + orgA + `' and fleet_id = '` + fleetA + `')`,
+		lock:            `select 1 from opamp_server.fleets where organization_id = '` + orgA + `' and id = '` + fleetA + `' for key share`,
+		waiting:         `%from opamp_server.fleets%for update%`,
+		remains:         `select (select count(*) from opamp_server.fleets where organization_id = '` + orgA + `' and id = '` + fleetA + `') + (select count(*) from opamp_server.collector_groups where organization_id = '` + orgA + `' and fleet_id = '` + fleetA + `')`,
 		notFound:        codeFleetNotFound,
 		notFoundMessage: messageFleetNotFound,
 	}, {
 		name:   "a group's",
 		target: groupTarget(orgA, fleetA, groupUnderDelete),
 		setup: []string{
-			`insert into telflo_opamp.collector_groups (id, organization_id, fleet_id, name, is_default, created_at, updated_at)
+			`insert into opamp_server.collector_groups (id, organization_id, fleet_id, name, is_default, created_at, updated_at)
 			 values ('` + groupUnderDelete + `', '` + orgA + `', '` + fleetA + `', 'doomed', false, now(), now())`,
-			`insert into telflo_opamp.collector_instances (id, organization_id, fleet_id, collector_group_id,
+			`insert into opamp_server.collector_instances (id, organization_id, fleet_id, collector_group_id,
 			   instance_uid, name, last_seen_at, created_at, updated_at)
 			 values (gen_random_uuid(), '` + orgA + `', '` + fleetA + `', '` + groupUnderDelete + `', gen_random_uuid(), 'edge-01', now(), now(), now())`,
 		},
-		lock:            `select 1 from telflo_opamp.collector_groups where organization_id = '` + orgA + `' and id = '` + groupUnderDelete + `' for key share`,
-		waiting:         `%from telflo_opamp.collector_groups%for update%`,
-		remains:         `select (select count(*) from telflo_opamp.collector_groups where organization_id = '` + orgA + `' and id = '` + groupUnderDelete + `') + (select count(*) from telflo_opamp.collector_instances where organization_id = '` + orgA + `' and collector_group_id = '` + groupUnderDelete + `')`,
+		lock:            `select 1 from opamp_server.collector_groups where organization_id = '` + orgA + `' and id = '` + groupUnderDelete + `' for key share`,
+		waiting:         `%from opamp_server.collector_groups%for update%`,
+		remains:         `select (select count(*) from opamp_server.collector_groups where organization_id = '` + orgA + `' and id = '` + groupUnderDelete + `') + (select count(*) from opamp_server.collector_instances where organization_id = '` + orgA + `' and collector_group_id = '` + groupUnderDelete + `')`,
 		notFound:        codeCollectorGroupNotFound,
 		notFoundMessage: messageCollectorGroupNotFound,
 		waitsBehind:     true,
@@ -133,7 +133,7 @@ func waitingDeletes(t *testing.T, d *databasetest.Databases, c deleteUnderLock) 
 	if err := d.Admin.QueryRow(context.Background(), `
 		select count(*) from pg_stat_activity
 		 where datname = current_database()
-		   and usename = 'telflo_opamp'
+		   and usename = 'telflo_opamp_server'
 		   and wait_event_type = 'Lock'
 		   and query like $1`, c.waiting).Scan(&n); err != nil {
 		t.Fatal(err)
@@ -219,14 +219,14 @@ func TestAGroupsDeleteFindingTheGroupGoneAnswers404AfterItsCallerHangsUp(t *test
 	expectStatus(t, "the group", call(s, http.MethodPost, groupsTarget(orgA, fleetA), []byte(`{"name":"doomed"}`), jsonType),
 		http.StatusCreated)
 	group := groupID(t, s, orgA, fleetA, "doomed")
-	c := deleteUnderLock{target: groupTarget(orgA, fleetA, group), waiting: `%from telflo_opamp.collector_groups%for update%`}
+	c := deleteUnderLock{target: groupTarget(orgA, fleetA, group), waiting: `%from opamp_server.collector_groups%for update%`}
 	background := context.Background()
 	gone, err := d.Admin.Begin(background)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = gone.Rollback(background) })
-	if _, err := gone.Exec(background, `delete from telflo_opamp.collector_groups where organization_id = $1 and id = $2`,
+	if _, err := gone.Exec(background, `delete from opamp_server.collector_groups where organization_id = $1 and id = $2`,
 		orgA, group); err != nil {
 		t.Fatal(err)
 	}

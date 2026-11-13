@@ -28,13 +28,13 @@ that the server's own tests can't see.
 reaches it only through its management API**, and every caller uses the
 same API.
 
-- **Its own database, schema and roles.** The database is `telflo_opamp`
+- **Its own database, schema and roles.** The database is `telflo_opamp_server`
   (any name may be passed to the bootstrap), on whatever Postgres server
   the operator chooses, beside other databases or alone. The schema is
-  `telflo_opamp`, named in every statement. `telflo_opamp_owner` owns the
+  `opamp_server`, named in every statement. `telflo_opamp_server_owner` owns the
   database and everything in it and runs the migrations;
-  `telflo_opamp_runtime` (`NOLOGIN`) holds exactly the privileges the
-  server needs; the server logs in as `telflo_opamp`, a member of it with
+  `telflo_opamp_server_runtime` (`NOLOGIN`) holds exactly the privileges the
+  server needs; the server logs in as `telflo_opamp_server`, a member of it with
   no DDL rights. An idempotent `deploy/bootstrap.sql`, run by a superuser,
   creates the database and the roles.
 - **`CONNECT` is revoked from `PUBLIC`** on the database, and granted back
@@ -46,7 +46,7 @@ same API.
   runs goose with SQL embedded in the binary, as the owner, before the
   server starts. `serve` refuses to start when the schema is behind or
   ahead of the binary, or when its role is a superuser, has `BYPASSRLS`,
-  owns an object in the schema or is a member of `telflo_opamp_owner`.
+  owns an object in the schema or is a member of `telflo_opamp_server_owner`.
   Every migration keeps working with the previous release (expand, then
   contract).
 - **The organization is an opaque tenant key**: `organization_id uuid not

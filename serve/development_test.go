@@ -60,7 +60,7 @@ func TestServeRefusesComposesDevelopmentSecretsUnlessAllowed(t *testing.T) {
 			"OPAMP_ENCRYPTION_KEYS_PREVIOUS: entry 2 of 2 holds compose.yaml's development value"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			values := map[string]string{DatabaseURLVariable: "postgresql://telflo_opamp@db/telflo_opamp",
+			values := map[string]string{DatabaseURLVariable: "postgresql://telflo_opamp_server@db/telflo_opamp_server",
 				management.SecretVariable: ownSecret, EncryptionKeyVariable: ownKey}
 			for name, value := range c.values {
 				values[name] = value
@@ -95,7 +95,7 @@ func TestTheDevelopmentSecretsSwitchIsTrueOrFalse(t *testing.T) {
 		"1":     "OPAMP_ALLOW_DEVELOPMENT_SECRETS must be true or false",
 	} {
 		settings, err := LoadSettings(RoleAll, keyed(map[string]string{
-			DatabaseURLVariable:             "postgresql://telflo_opamp@db/telflo_opamp",
+			DatabaseURLVariable:             "postgresql://telflo_opamp_server@db/telflo_opamp_server",
 			management.SecretVariable:       strings.Repeat("s", management.MinSecretBytes),
 			AllowDevelopmentSecretsVariable: raw,
 		}), unsetNothing)

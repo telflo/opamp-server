@@ -19,9 +19,9 @@ import (
 	"github.com/telflo/opamp-server/telemetry"
 )
 
-// Postgres is the Store `serve` uses, on telflo_opamp.collector_instances
+// Postgres is the Store `serve` uses, on opamp_server.collector_instances
 // and collector_errors (reading organizations, fleets, collector_groups and
-// publications), as telflo_opamp with its grants. Every
+// publications), as telflo_opamp_server with its grants. Every
 // statement names the schema, and every query filters on organization_id
 // first, but Cleanup's, which runs across organizations by its nature.
 //
@@ -146,12 +146,12 @@ func selectList(alias string, lean bool) string {
 // without a pin.
 func resolutionJoins(alias string) string {
 	return strings.ReplaceAll(`
-		left join telflo_opamp.publications pp
+		left join opamp_server.publications pp
 		       on pp.organization_id = A.organization_id and pp.id = A.pinned_publication_id
-		left join telflo_opamp.collector_groups g
+		left join opamp_server.collector_groups g
 		       on g.organization_id = A.organization_id and g.fleet_id = A.fleet_id
 		      and g.id = A.collector_group_id
-		left join telflo_opamp.publications gp
+		left join opamp_server.publications gp
 		       on gp.organization_id = A.organization_id and gp.id = g.assigned_publication_id
 		      and A.pinned_publication_id is null`, "A.", alias+".")
 }
@@ -218,13 +218,13 @@ func wantedStamp(from, where, alias string) wantedSQL {
 		         (select max(coalesce(greatest(po.stamp,
 		                                       case when po.value is null then go.stamp end,
 		                                       case when po.value is null and go.value is null then v.stamp end), 0))
-		            from telflo_opamp.publication_variable_names n
-		            left join telflo_opamp.variables v
+		            from opamp_server.publication_variable_names n
+		            left join opamp_server.variables v
 		                   on v.organization_id = n.organization_id and v.name = n.name
-		            left join telflo_opamp.variable_group_overrides po
+		            left join opamp_server.variable_group_overrides po
 		                   on po.organization_id = n.organization_id and po.variable_group_id = k.pin_vg
 		                  and po.variable_id = v.id
-		            left join telflo_opamp.variable_group_overrides go
+		            left join opamp_server.variable_group_overrides go
 		                   on go.organization_id = n.organization_id and go.variable_group_id = k.group_vg
 		                  and go.variable_id = v.id
 		           where n.organization_id = $1 and n.publication_id = k.resolved_id) as names_stamp
@@ -248,12 +248,12 @@ func wantedStamp(from, where, alias string) wantedSQL {
 // The wanted stamp's three sources.
 var (
 	// oneWanted is one collector's: getListed's, $2 its fleet and $3 its id.
-	oneWanted = wantedStamp("telflo_opamp.collector_instances c",
+	oneWanted = wantedStamp("opamp_server.collector_instances c",
 		"c.organization_id = $1 and c.fleet_id = $2 and c.id = $3", "c")
 	// pageWanted is a page's: List's, over its common table expression page.
 	pageWanted = wantedStamp("page c", "c.organization_id = $1", "c")
 	// fleetsWanted is the fleets' rows: summariesStatement's, $2 the fleets.
-	fleetsWanted = wantedStamp("telflo_opamp.collector_instances c",
+	fleetsWanted = wantedStamp("opamp_server.collector_instances c",
 		"c.organization_id = $1 and c.fleet_id = any ($2)", "c")
 )
 
@@ -307,7 +307,7 @@ func (s *Postgres) enroll(ctx context.Context, tx pgx.Tx, e Enrollment, desired 
 	var max *int32
 	err = tx.QueryRow(ctx, `
 		select max_collectors
-		  from telflo_opamp.organizations
+		  from opamp_server.organizations
 		 where id = $1
 		   for no key update`,
 		e.OrganizationID).Scan(&max)
@@ -330,7 +330,7 @@ func (s *Postgres) enroll(ctx context.Context, tx pgx.Tx, e Enrollment, desired 
 	var group uuid.UUID
 	err = tx.QueryRow(ctx, `
 		select id
-		  from telflo_opamp.collector_groups
+		  from opamp_server.collector_groups
 		 where organization_id = $1 and fleet_id = $2
 		   and case when $3::uuid is null then is_default else id = $3::uuid end
 		   for key share`,
@@ -364,16 +364,16 @@ func (s *Postgres) enroll(ctx context.Context, tx pgx.Tx, e Enrollment, desired 
 			with counted as (
 			  select case when $8::int is null then null::bigint
 			              else (select count(*)
-			                      from telflo_opamp.collector_instances
+			                      from opamp_server.collector_instances
 			                     where organization_id = $1::uuid) end as n
 			), inserted as (
-			  insert into telflo_opamp.collector_instances
+			  insert into opamp_server.collector_instances
 			    (id, organization_id, fleet_id, collector_group_id, instance_uid, name,
 			     enrollment_token_id, last_seen_at, created_at, updated_at)
 			  select $2::uuid, $1::uuid, $3::uuid, $4::uuid, $5::uuid,
 			         case when $6::text is not null and not exists (
 			                select 1
-			                  from telflo_opamp.collector_instances x
+			                  from opamp_server.collector_instances x
 			                 where x.organization_id = $1::uuid and x.name = $6::text)
 			              then $6::text else $7::text end,
 			         $9::uuid, $10::timestamptz, $10::timestamptz, $10::timestamptz
@@ -410,7 +410,7 @@ func (s *Postgres) enroll(ctx context.Context, tx pgx.Tx, e Enrollment, desired 
 	// winner's row only in a new snapshot.
 	rows, err := tx.Query(ctx, `
 		select `+selectList("c", false)+`
-		  from telflo_opamp.collector_instances c
+		  from opamp_server.collector_instances c
 		 where c.organization_id = $1 and c.instance_uid = $2`,
 		e.OrganizationID, e.InstanceUID)
 	if err != nil {
@@ -445,10 +445,10 @@ func (s *Postgres) enroll(ctx context.Context, tx pgx.Tx, e Enrollment, desired 
 var pollStatement = `
 	with before as (
 	  select ` + selectList("c", true) + `
-	    from telflo_opamp.collector_instances c
+	    from opamp_server.collector_instances c
 	   where c.organization_id = $1 and c.instance_uid = $2
 	), touched as (
-	  update telflo_opamp.collector_instances c
+	  update opamp_server.collector_instances c
 	     set last_seen_at = greatest(c.last_seen_at, $5), enrollment_token_id = $3
 	    from before b
 	   where c.organization_id = $1 and c.id = b.id and c.fleet_id = $4
@@ -459,7 +459,7 @@ var pollStatement = `
 	       exists (select 1 from touched),` + resolutionColumns("b") + `,
 	       o.variables_revision, o.generation
 	  from before b
-	  join telflo_opamp.organizations o on o.id = b.organization_id` + resolutionJoins("b")
+	  join opamp_server.organizations o on o.id = b.organization_id` + resolutionJoins("b")
 
 // Poll runs pollStatement.
 func (s *Postgres) Poll(ctx context.Context, p PollRequest) (r PollResult, err error) {
@@ -499,7 +499,7 @@ func (s *Postgres) YAML(ctx context.Context, organizationID uuid.UUID, ref Ref) 
 	defer func() { end(answerOrFailure(err)) }()
 	err = s.pool.QueryRow(ctx, `
 		select yaml, sha256
-		  from telflo_opamp.publications
+		  from opamp_server.publications
 		 where organization_id = $1 and id = $2`,
 		organizationID, ref.ID).Scan(&y.YAML, &y.SHA256)
 	switch {
@@ -585,7 +585,7 @@ func (s *Postgres) Report(ctx context.Context, r Report) (written bool, err erro
 	ctx, end := telemetry.StartDBSpan(ctx, "collectors.report")
 	defer func() { end(answerOrFailure(err)) }()
 	tag, err := s.pool.Exec(ctx, `
-		update telflo_opamp.collector_instances
+		update opamp_server.collector_instances
 		   set `+strings.Join(u.sets, ", ")+`
 		 where organization_id = $1 and fleet_id = $2 and id = $3
 		   and (`+strings.Join(u.guards, " or ")+`)`,
@@ -623,7 +623,7 @@ func (s *Postgres) RecordError(ctx context.Context, organizationID, fleetID, col
 		}
 		err := tx.QueryRow(ctx, `
 			select 1
-			  from telflo_opamp.collector_instances
+			  from opamp_server.collector_instances
 			 where organization_id = $1 and fleet_id = $2 and id = $3
 			   for no key update`,
 			organizationID, fleetID, collectorID).Scan(new(int))
@@ -637,24 +637,24 @@ func (s *Postgres) RecordError(ctx context.Context, organizationID, fleetID, col
 		// the history (under the collector's lock above, so a racing poll
 		// sees this one's) writes nothing.
 		if _, err := tx.Exec(ctx, `
-			insert into telflo_opamp.collector_errors
+			insert into opamp_server.collector_errors
 				(id, organization_id, collector_instance_id, reported_at, config_sha256, message)
 			select $3, $1, $2, $4, $5, $6
 			 where not $7::boolean
 			    or not exists (
 			         select 1
-			           from telflo_opamp.collector_errors x
+			           from opamp_server.collector_errors x
 			          where x.organization_id = $1 and x.collector_instance_id = $2
 			            and x.config_sha256 = $5 and x.message = $6)`,
 			organizationID, collectorID, uuid.New(), at(e.At), e.ConfigSHA256, message, e.OncePerHash); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `
-			delete from telflo_opamp.collector_errors e
+			delete from opamp_server.collector_errors e
 			 where e.organization_id = $1 and e.collector_instance_id = $2
 			   and e.id in (
 			     select x.id
-			       from telflo_opamp.collector_errors x
+			       from opamp_server.collector_errors x
 			      where x.organization_id = $1 and x.collector_instance_id = $2
 			      order by x.reported_at desc, x.id desc
 			     offset $3)`,
@@ -686,7 +686,7 @@ func (s *Postgres) ListErrors(ctx context.Context, organizationID, fleetID, coll
 	}
 	query := `
 		select id, collector_instance_id, reported_at, config_sha256, message
-		  from telflo_opamp.collector_errors
+		  from opamp_server.collector_errors
 		 where organization_id = $1 and collector_instance_id = $2`
 	args := []any{organizationID, collectorID, limit + 1}
 	if after != nil {
@@ -726,7 +726,7 @@ func (s *Postgres) collectorExists(ctx context.Context, q queryer, organizationI
 	if err := q.QueryRow(ctx, `
 		select exists (
 		  select 1
-		    from telflo_opamp.collector_instances
+		    from opamp_server.collector_instances
 		   where organization_id = $1 and fleet_id = $2 and id = $3)`,
 		organizationID, fleetID, id).Scan(&exists); err != nil {
 		return err
@@ -760,10 +760,10 @@ func (s *Postgres) Cleanup(ctx context.Context, cutoff time.Time) (result Cleanu
 				return err
 			}
 			tag, err := tx.Exec(ctx, `
-				delete from telflo_opamp.collector_errors
+				delete from opamp_server.collector_errors
 				 where ctid = any (array (
 				         select ctid
-				           from telflo_opamp.collector_errors
+				           from opamp_server.collector_errors
 				          where reported_at < $1
 				          limit $2))`,
 				cutoff, CleanupBatchSize)
@@ -799,7 +799,7 @@ func (s *Postgres) List(ctx context.Context, organizationID, fleetID uuid.UUID, 
 	query := `
 		with page as (
 		  select c.*
-		    from telflo_opamp.collector_instances c
+		    from opamp_server.collector_instances c
 		   where c.organization_id = $1 and c.fleet_id = $2`
 	// One row more than the page, to know whether another page follows.
 	args := []any{organizationID, fleetID, o.Limit + 1}
@@ -869,7 +869,7 @@ func (s *Postgres) fleetExists(ctx context.Context, organizationID, fleetID uuid
 	var exists bool
 	if err := s.pool.QueryRow(ctx, `
 		select exists (
-		  select 1 from telflo_opamp.fleets where organization_id = $1 and id = $2)`,
+		  select 1 from opamp_server.fleets where organization_id = $1 and id = $2)`,
 		organizationID, fleetID).Scan(&exists); err != nil {
 		return fmt.Errorf("collectors: fleet exists: %w", err)
 	}
@@ -903,7 +903,7 @@ type rowsQueryer interface {
 var getStatement = `
 	with ` + oneWanted.combos + `
 	select ` + selectList("c", false) + `,` + resolutionColumns("c") + `,` + oneWanted.stamp + `
-	  from telflo_opamp.collector_instances c` + resolutionJoins("c") + oneWanted.join + `
+	  from opamp_server.collector_instances c` + resolutionJoins("c") + oneWanted.join + `
 	 where c.organization_id = $1 and c.fleet_id = $2 and c.id = $3`
 
 // getListed reads the fleet's collector with what resolves for it, or
@@ -934,13 +934,13 @@ func (s *Postgres) Rename(ctx context.Context, organizationID, fleetID, id uuid.
 	ctx, end := telemetry.StartDBSpan(ctx, "collectors.rename")
 	defer func() { end(answerOrFailure(err)) }()
 	rows, err := s.pool.Query(ctx, `
-		update telflo_opamp.collector_instances
+		update opamp_server.collector_instances
 		   set name = $4,
 		       updated_at = case when name is distinct from $4 then $5 else updated_at end
 		 where organization_id = $1 and fleet_id = $2 and id = $3
 		   and not exists (
 		         select 1
-		           from telflo_opamp.collector_instances x
+		           from opamp_server.collector_instances x
 		          where x.organization_id = $1 and x.name = $4 and x.id <> $3)
 		returning `+strings.Join(returningColumns(), ", "),
 		organizationID, fleetID, id, name, at(now))
@@ -996,8 +996,8 @@ func readBindings(ctx context.Context, tx pgx.Tx, organizationID, fleetID, id uu
 	err := tx.QueryRow(ctx, `
 		select c.collector_group_id, g.variable_group_id, g.variable_group_stamp,
 		       c.pinned_variable_group_id, c.pinned_variable_group_stamp
-		  from telflo_opamp.collector_instances c
-		  join telflo_opamp.collector_groups g
+		  from opamp_server.collector_instances c
+		  join opamp_server.collector_groups g
 		    on g.organization_id = c.organization_id and g.fleet_id = c.fleet_id and g.id = c.collector_group_id
 		 where c.organization_id = $1 and c.fleet_id = $2 and c.id = $3`,
 		organizationID, fleetID, id).Scan(&b.groupID, &b.groupVariableGroup, &b.groupStamp,
@@ -1014,7 +1014,7 @@ func targetGroup(ctx context.Context, tx pgx.Tx, organizationID, fleetID, groupI
 	var variableGroup *uuid.UUID
 	err := tx.QueryRow(ctx, `
 		select variable_group_id
-		  from telflo_opamp.collector_groups
+		  from opamp_server.collector_groups
 		 where organization_id = $1 and fleet_id = $2 and id = $3
 		   for key share`,
 		organizationID, fleetID, groupID).Scan(&variableGroup)
@@ -1037,7 +1037,7 @@ func checkVariableGroup(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID
 	if err := tx.QueryRow(ctx, `
 		select exists (
 		  select 1
-		    from telflo_opamp.variable_groups
+		    from opamp_server.variable_groups
 		   where organization_id = $1 and id = $2)`,
 		organizationID, *id).Scan(&exists); err != nil || exists {
 		return err
@@ -1108,7 +1108,7 @@ func (s *Postgres) Move(ctx context.Context, organizationID, fleetID, id, groupI
 			stamp = carriedStamp(current.pinnedStamp, current.groupStamp)
 		}
 		rows, err := tx.Query(ctx, `
-			update telflo_opamp.collector_instances
+			update opamp_server.collector_instances
 			   set collector_group_id = $4,
 			       updated_at = case when collector_group_id is distinct from $4 then $5 else updated_at end,
 			       pinned_variable_group_stamp = $6
@@ -1148,7 +1148,7 @@ func checkRef(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID, ref *Ref
 	if err := tx.QueryRow(ctx, `
 		select exists (
 		  select 1
-		    from telflo_opamp.publications
+		    from opamp_server.publications
 		   where organization_id = $1 and id = $2)`,
 		organizationID, ref.ID).Scan(&exists); err != nil || exists {
 		return err
@@ -1200,7 +1200,7 @@ func (s *Postgres) Pin(ctx context.Context, organizationID, fleetID, id uuid.UUI
 			return err
 		}
 		rows, err := tx.Query(ctx, `
-			update telflo_opamp.collector_instances
+			update opamp_server.collector_instances
 			   set pinned_publication_id = $4,
 			       updated_at = case when pinned_publication_id is distinct from $4 then $5
 			                         else updated_at end
@@ -1316,7 +1316,7 @@ func (s *Postgres) Update(ctx context.Context, organizationID, fleetID, id uuid.
 		}
 		args = append(args, at(now))
 		statement := fmt.Sprintf(`
-			update telflo_opamp.collector_instances
+			update opamp_server.collector_instances
 			   set %s,
 			       updated_at = case when %s then $%d else updated_at end
 			 where organization_id = $1 and fleet_id = $2 and id = $3`,
@@ -1325,7 +1325,7 @@ func (s *Postgres) Update(ctx context.Context, organizationID, fleetID, id uuid.
 			statement += `
 			   and not exists (
 			         select 1
-			           from telflo_opamp.collector_instances x
+			           from opamp_server.collector_instances x
 			          where x.organization_id = $1 and x.name = $4 and x.id <> $3)`
 		}
 		tag, err := tx.Exec(ctx, statement, args...)
@@ -1393,7 +1393,7 @@ func (s *Postgres) BulkPin(ctx context.Context, organizationID, fleetID uuid.UUI
 		}
 		rows, err := tx.Query(ctx, `
 			select id, pinned_variable_group_id
-			  from telflo_opamp.collector_instances
+			  from opamp_server.collector_instances
 			 where organization_id = $1 and fleet_id = $2 and id = any ($3)
 			 order by id
 			   for no key update`,
@@ -1445,7 +1445,7 @@ func (s *Postgres) BulkPin(ctx context.Context, organizationID, fleetID uuid.UUI
 			differs = append(differs, fmt.Sprintf("pinned_variable_group_id is distinct from $%d", n))
 		}
 		tag, err := tx.Exec(ctx, fmt.Sprintf(`
-			update telflo_opamp.collector_instances
+			update opamp_server.collector_instances
 			   set %s, updated_at = $4
 			 where organization_id = $1 and fleet_id = $2 and id = any ($3)
 			   and (%s)`, strings.Join(sets, ", "), strings.Join(differs, " or ")),
@@ -1484,7 +1484,7 @@ func (s *Postgres) Delete(ctx context.Context, organizationID, fleetID, id uuid.
 			return err
 		}
 		tag, err := tx.Exec(ctx, `
-			delete from telflo_opamp.collector_instances
+			delete from opamp_server.collector_instances
 			 where organization_id = $1 and fleet_id = $2 and id = $3`,
 			organizationID, fleetID, id)
 		deleted = tag.RowsAffected() == 1
@@ -1524,7 +1524,7 @@ var summariesStatement = `
 	              when c.effective_status = 'applied' and c.effective_sha256 = c.served_sha256 then 'in_sync'
 	              when c.effective_status = 'applied' then 'drifted'
 	              else 'pending' end as sync
-	    from telflo_opamp.collector_instances c` + resolutionJoins("c") + fleetsWanted.join + `
+	    from opamp_server.collector_instances c` + resolutionJoins("c") + fleetsWanted.join + `
 	   where c.organization_id = $1 and c.fleet_id = any ($2)
 	)
 	select f.id,
@@ -1539,7 +1539,7 @@ var summariesStatement = `
 	       count(*) filter (where k.sync = 'drifted'),
 	       count(*) filter (where k.sync = 'unassigned'),
 	       max(k.last_seen_at)
-	  from telflo_opamp.fleets f
+	  from opamp_server.fleets f
 	  left join classified k on k.fleet_id = f.id
 	 where f.organization_id = $1 and f.id = any ($2)
 	 group by f.id
@@ -1612,7 +1612,7 @@ func lockFleet(ctx context.Context, tx pgx.Tx, organizationID, fleetID uuid.UUID
 	}
 	err := tx.QueryRow(ctx, `
 		select 1
-		  from telflo_opamp.organizations
+		  from opamp_server.organizations
 		 where id = $1
 		   for key share`,
 		organizationID).Scan(new(int))
@@ -1631,7 +1631,7 @@ func lockFleet(ctx context.Context, tx pgx.Tx, organizationID, fleetID uuid.UUID
 func keyShareFleet(ctx context.Context, tx pgx.Tx, organizationID, fleetID uuid.UUID) (bool, error) {
 	err := tx.QueryRow(ctx, `
 		select 1
-		  from telflo_opamp.fleets
+		  from opamp_server.fleets
 		 where organization_id = $1 and id = $2
 		   for key share`,
 		organizationID, fleetID).Scan(new(int))

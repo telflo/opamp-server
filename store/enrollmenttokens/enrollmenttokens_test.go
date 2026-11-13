@@ -19,7 +19,7 @@ import (
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests").
-const testDatabase = "telflo_opamp_enrollmenttokens_test"
+const testDatabase = "telflo_opamp_server_enrollmenttokens_test"
 
 var ctx = context.Background()
 
@@ -284,7 +284,7 @@ func TestTwoConcurrentRotationsLeaveOneCurrentTokenAndOnePredecessorInItsGrace(t
 			t.Fatal(err)
 		}
 		defer func() { _ = blocker.Rollback(ctx) }()
-		if _, err := blocker.Exec(ctx, `select 1 from telflo_opamp.enrollment_tokens
+		if _, err := blocker.Exec(ctx, `select 1 from opamp_server.enrollment_tokens
 			where organization_id = $1 and id = $2 for update`, OrgA, c.RotateTokenID); err != nil {
 			t.Fatal(err)
 		}
@@ -372,7 +372,7 @@ func TestARotationRacingTheCurrentTokensRevokeNeverTakesItAsThePredecessor(t *te
 			t.Fatal(err)
 		}
 		defer func() { _ = blocker.Rollback(ctx) }()
-		if _, err := blocker.Exec(ctx, `update telflo_opamp.enrollment_tokens set revoked_at = $3
+		if _, err := blocker.Exec(ctx, `update opamp_server.enrollment_tokens set revoked_at = $3
 			where organization_id = $1 and id = $2 and revoked_at is null`, OrgA, c.RotateTokenID, revokedAt); err != nil {
 			t.Fatal(err)
 		}
@@ -624,7 +624,7 @@ func TestARevokeRacingItsFleetsDeleteDoesNotDeadlock(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = blocker.Rollback(ctx) }()
-		if _, err := blocker.Exec(ctx, `select 1 from telflo_opamp.enrollment_tokens
+		if _, err := blocker.Exec(ctx, `select 1 from opamp_server.enrollment_tokens
 			where organization_id = $1 and id = $2 for update`, OrgA, c.RotateTokenID); err != nil {
 			t.Fatal(err)
 		}
@@ -697,7 +697,7 @@ func raceARevealAndItsFleetsDelete(t *testing.T, s *Stores, revealFirst bool) {
 		t.Fatal(err)
 	}
 	defer func() { _ = blocker.Rollback(ctx) }()
-	if _, err := blocker.Exec(ctx, `select 1 from telflo_opamp.enrollment_tokens
+	if _, err := blocker.Exec(ctx, `select 1 from opamp_server.enrollment_tokens
 		where organization_id = $1 and id = $2 for update`, OrgA, c.RotateTokenID); err != nil {
 		t.Fatal(err)
 	}
@@ -1136,7 +1136,7 @@ func TestTwoConcurrentIssuesMakeOneDefaultToken(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = blocker.Rollback(ctx) }()
-		if _, err := blocker.Exec(ctx, `select 1 from telflo_opamp.fleets
+		if _, err := blocker.Exec(ctx, `select 1 from opamp_server.fleets
 			where organization_id = $1 and id = $2 for no key update`, OrgA, c.Fleet.ID); err != nil {
 			t.Fatal(err)
 		}
@@ -1194,7 +1194,7 @@ func TestAnIssueRacingTheDefaultTokensRevokeWaitsAndIssues(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = blocker.Rollback(ctx) }()
-		if _, err := blocker.Exec(ctx, `update telflo_opamp.enrollment_tokens set revoked_at = $3
+		if _, err := blocker.Exec(ctx, `update opamp_server.enrollment_tokens set revoked_at = $3
 			where organization_id = $1 and id = $2`, OrgA, c.DefaultTokenID, Now); err != nil {
 			t.Fatal(err)
 		}
@@ -1258,7 +1258,7 @@ func raceAnIssueAndADelete(t *testing.T, s *Stores, deleted string, issueFirst b
 		t.Fatal(err)
 	}
 	defer func() { _ = blocker.Rollback(ctx) }()
-	if _, err := blocker.Exec(ctx, `select 1 from telflo_opamp.fleets
+	if _, err := blocker.Exec(ctx, `select 1 from opamp_server.fleets
 		where organization_id = $1 and id = $2 for no key update`, OrgA, c.Fleet.ID); err != nil {
 		t.Fatal(err)
 	}

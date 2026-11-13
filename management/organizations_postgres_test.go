@@ -30,7 +30,7 @@ func organizationsServer(t *testing.T, d *databasetest.Databases, registry organ
 // as the superuser.
 func organizationRows(t *testing.T, pool *pgxpool.Pool) []string {
 	t.Helper()
-	rows, err := pool.Query(context.Background(), `select o::text from telflo_opamp.organizations o order by id`)
+	rows, err := pool.Query(context.Background(), `select o::text from opamp_server.organizations o order by id`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func postWhileLocked(t *testing.T, s *Server, d *databasetest.Databases, payload
 		t.Fatal(err)
 	}
 	defer func() { _ = lock.Rollback(ctx) }()
-	if _, err := lock.Exec(ctx, "lock table telflo_opamp.organizations in share mode"); err != nil {
+	if _, err := lock.Exec(ctx, "lock table opamp_server.organizations in share mode"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -76,9 +76,9 @@ func postWhileLocked(t *testing.T, s *Server, d *databasetest.Databases, payload
 		if err := d.Admin.QueryRow(ctx, `
 			select count(*) from pg_stat_activity
 			 where datname = current_database()
-			   and usename = 'telflo_opamp'
+			   and usename = 'telflo_opamp_server'
 			   and wait_event_type = 'Lock'
-			   and query like '%insert into telflo_opamp.organizations%'`).Scan(&blocked); err != nil {
+			   and query like '%insert into opamp_server.organizations%'`).Scan(&blocked); err != nil {
 			t.Fatal(err)
 		}
 		if blocked < 2 {
@@ -153,14 +153,14 @@ type readThenInsertOrganizations struct {
 func (r readThenInsertOrganizations) Create(ctx context.Context, o organizations.Organization) (organizations.CreateResult, organizations.Organization, error) {
 	var exists bool
 	if err := r.pool.QueryRow(ctx,
-		`select exists (select 1 from telflo_opamp.organizations where id = $1)`, o.ID).Scan(&exists); err != nil {
+		`select exists (select 1 from opamp_server.organizations where id = $1)`, o.ID).Scan(&exists); err != nil {
 		return 0, organizations.Organization{}, err
 	}
 	if exists {
 		return r.Store.Create(ctx, o)
 	}
 	if _, err := r.pool.Exec(ctx, `
-		insert into telflo_opamp.organizations (id, name, created_at, updated_at, generation)
+		insert into opamp_server.organizations (id, name, created_at, updated_at, generation)
 		values ($1, $2, $3, $4, gen_random_uuid())`, o.ID, o.Name, o.CreatedAt, o.UpdatedAt); err != nil {
 		return 0, organizations.Organization{}, fmt.Errorf("insert: %w", err)
 	}
@@ -177,7 +177,7 @@ func TestOrganizationTimesAreTheInjectedClocks(t *testing.T) {
 	stored := func() (createdAt, updatedAt time.Time) {
 		t.Helper()
 		if err := d.Admin.QueryRow(ctx,
-			`select created_at, updated_at from telflo_opamp.organizations where id = $1`, orgA).Scan(&createdAt, &updatedAt); err != nil {
+			`select created_at, updated_at from opamp_server.organizations where id = $1`, orgA).Scan(&createdAt, &updatedAt); err != nil {
 			t.Fatal(err)
 		}
 		return createdAt.UTC(), updatedAt.UTC()

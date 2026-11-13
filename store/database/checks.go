@@ -51,7 +51,7 @@ const roleHint = "Set OPAMP_DATABASE_URL to the server's own login role " +
 // skips every grant on what it owns), or a role that may create in the
 // database or in the schema (the server runs no DDL, so a right to make
 // objects is one it must not hold). As the platform's assertApplicationRole
-// does, it also refuses a role that doesn't inherit telflo_opamp_runtime's
+// does, it also refuses a role that doesn't inherit telflo_opamp_server_runtime's
 // privileges, since the server can do nothing without them.
 func CheckRole(ctx context.Context, pool *pgxpool.Pool) error {
 	var (

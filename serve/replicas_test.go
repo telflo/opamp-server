@@ -115,8 +115,8 @@ func TestTheCleanupRunsOnOneReplicaOnly(t *testing.T) {
 	ctx := context.Background()
 	old := clock.Now().Add(-collectors.ErrorRetention - time.Hour)
 	if _, err := d.Owner.Exec(ctx, `
-		insert into telflo_opamp.collector_errors (id, organization_id, collector_instance_id, reported_at, message)
-		select gen_random_uuid(), organization_id, id, $1, 'old' from telflo_opamp.collector_instances, generate_series(1, 7)`,
+		insert into opamp_server.collector_errors (id, organization_id, collector_instance_id, reported_at, message)
+		select gen_random_uuid(), organization_id, id, $1, 'old' from opamp_server.collector_instances, generate_series(1, 7)`,
 		old); err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestTheCleanupRunsOnOneReplicaOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = blocker.Rollback(ctx) }()
-	if _, err := blocker.Exec(ctx, `select 1 from telflo_opamp.collector_errors limit 1 for update`); err != nil {
+	if _, err := blocker.Exec(ctx, `select 1 from opamp_server.collector_errors limit 1 for update`); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan struct{})
@@ -148,7 +148,7 @@ func TestTheCleanupRunsOnOneReplicaOnly(t *testing.T) {
 		t.Fatalf("A's cleanup line: %v", linesA)
 	}
 	var left int
-	if err := d.Admin.QueryRow(ctx, `select count(*) from telflo_opamp.collector_errors`).Scan(&left); err != nil || left != 0 {
+	if err := d.Admin.QueryRow(ctx, `select count(*) from opamp_server.collector_errors`).Scan(&left); err != nil || left != 0 {
 		t.Fatalf("%d error rows left, %v", left, err)
 	}
 }

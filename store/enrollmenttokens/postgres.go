@@ -14,9 +14,9 @@ import (
 	"github.com/telflo/opamp-server/telemetry"
 )
 
-// Postgres is the Store `serve` uses, on telflo_opamp.enrollment_tokens and
+// Postgres is the Store `serve` uses, on opamp_server.enrollment_tokens and
 // enrollment_token_events (and fleets, for Rotate's lock and Lookup's
-// join; collector_instances, for List's counts), as telflo_opamp with its
+// join; collector_instances, for List's counts), as telflo_opamp_server with its
 // grants: tokens are never deleted but with their fleet, and of a token
 // only expires_at, revoked_at and do_refresh change. Every statement names
 // the schema, and every query but Lookup's filters on organization_id
@@ -59,10 +59,10 @@ func (s *Postgres) List(ctx context.Context, organizationID, fleetID uuid.UUID, 
 	rows, err := s.pool.Query(ctx, `
 		select `+prefixed+`,
 		       (select count(*)
-		          from telflo_opamp.collector_instances c
+		          from opamp_server.collector_instances c
 		         where c.organization_id = t.organization_id and c.fleet_id = t.fleet_id
 		           and c.enrollment_token_id = t.id and c.last_seen_at > $3)
-		  from telflo_opamp.enrollment_tokens t
+		  from opamp_server.enrollment_tokens t
 		 where t.organization_id = $1 and t.fleet_id = $2
 		 order by t.created_at desc, t.id desc`,
 		organizationID, fleetID, at(now).Add(-ActiveWindow))
@@ -94,7 +94,7 @@ func (s *Postgres) fleetExists(ctx context.Context, organizationID, fleetID uuid
 	var exists bool
 	if err := s.pool.QueryRow(ctx, `
 		select exists (
-			select 1 from telflo_opamp.fleets
+			select 1 from opamp_server.fleets
 			 where organization_id = $1 and id = $2)`,
 		organizationID, fleetID).Scan(&exists); err != nil {
 		return fmt.Errorf("enrollmenttokens: fleet: %w", err)
@@ -123,7 +123,7 @@ type queryer interface {
 func (s *Postgres) get(ctx context.Context, q queryer, organizationID, fleetID, id uuid.UUID) (Token, error) {
 	rows, err := q.Query(ctx, `
 		select `+columns+`
-		  from telflo_opamp.enrollment_tokens
+		  from opamp_server.enrollment_tokens
 		 where organization_id = $1 and fleet_id = $2 and id = $3`,
 		organizationID, fleetID, id)
 	if err != nil {
@@ -177,7 +177,7 @@ func (s *Postgres) Rotate(ctx context.Context, r Rotation) (result RotateResult,
 		var status fleets.Status
 		err := tx.QueryRow(ctx, `
 			select status
-			  from telflo_opamp.fleets
+			  from opamp_server.fleets
 			 where organization_id = $1 and id = $2
 			   for no key update`,
 			r.OrganizationID, r.FleetID).Scan(&status)
@@ -192,11 +192,11 @@ func (s *Postgres) Rotate(ctx context.Context, r Rotation) (result RotateResult,
 
 		var predecessor uuid.UUID
 		err = tx.QueryRow(ctx, `
-			update telflo_opamp.enrollment_tokens
+			update opamp_server.enrollment_tokens
 			   set expires_at = least(expires_at, $4::timestamptz), do_refresh = true
 			 where organization_id = $1 and fleet_id = $2 and revoked_at is null and id = (
 			         select id
-			           from telflo_opamp.enrollment_tokens
+			           from opamp_server.enrollment_tokens
 			          where organization_id = $1 and fleet_id = $2 and kind = 'rotate'
 			            and revoked_at is null and (expires_at is null or expires_at > $3)
 			          `+currentOrder+`
@@ -212,7 +212,7 @@ func (s *Postgres) Rotate(ctx context.Context, r Rotation) (result RotateResult,
 		}
 
 		rows, err := tx.Query(ctx, `
-			insert into telflo_opamp.enrollment_tokens (`+columns+`)
+			insert into opamp_server.enrollment_tokens (`+columns+`)
 			values ($1, $2, $3, 'rotate', $4, null, false, $5, $6, $7)
 			returning `+columns,
 			uuid.New(), r.OrganizationID, r.FleetID, expiresAt, actorID, actorEmail, now)
@@ -262,7 +262,7 @@ func (s *Postgres) IssueDefault(ctx context.Context, organizationID, fleetID uui
 		var status fleets.Status
 		err := tx.QueryRow(ctx, `
 			select status
-			  from telflo_opamp.fleets
+			  from opamp_server.fleets
 			 where organization_id = $1 and id = $2
 			   for no key update`,
 			organizationID, fleetID).Scan(&status)
@@ -275,7 +275,7 @@ func (s *Postgres) IssueDefault(ctx context.Context, organizationID, fleetID uui
 			return ErrFleetArchived
 		}
 		rows, err := tx.Query(ctx, `
-			insert into telflo_opamp.enrollment_tokens (`+columns+`)
+			insert into opamp_server.enrollment_tokens (`+columns+`)
 			values ($1, $2, $3, 'default', null, null, false, $4, $5, $6)
 			on conflict (organization_id, fleet_id) where kind = 'default' and revoked_at is null do nothing
 			returning `+columns,
@@ -302,7 +302,7 @@ func (s *Postgres) IssueDefault(ctx context.Context, organizationID, fleetID uui
 func insertEvent(ctx context.Context, tx pgx.Tx, organizationID, fleetID, tokenID uuid.UUID, kind EventKind,
 	actorID *uuid.UUID, actorEmail *string, now time.Time) error {
 	_, err := tx.Exec(ctx, `
-		insert into telflo_opamp.enrollment_token_events
+		insert into opamp_server.enrollment_token_events
 			(id, organization_id, fleet_id, enrollment_token_id, event, actor_id, actor_email, occurred_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		uuid.New(), organizationID, fleetID, tokenID, string(kind), actorID, actorEmail, now)
@@ -327,7 +327,7 @@ func (s *Postgres) Revoke(ctx context.Context, organizationID, fleetID, id uuid.
 			return err
 		}
 		rows, err := tx.Query(ctx, `
-			update telflo_opamp.enrollment_tokens
+			update opamp_server.enrollment_tokens
 			   set revoked_at = $4
 			 where organization_id = $1 and fleet_id = $2 and id = $3 and revoked_at is null
 			returning `+columns,
@@ -394,10 +394,10 @@ func (s *Postgres) recordViewed(ctx context.Context, tx pgx.Tx, organizationID, 
 	rows, err := tx.Query(ctx, `
 		with t as (
 			select `+columns+`
-			  from telflo_opamp.enrollment_tokens
+			  from opamp_server.enrollment_tokens
 			 where organization_id = $1 and fleet_id = $2 and id = $3),
 		viewed as (
-			insert into telflo_opamp.enrollment_token_events
+			insert into opamp_server.enrollment_token_events
 				(id, organization_id, fleet_id, enrollment_token_id, event, actor_id, actor_email, occurred_at)
 			select $4, organization_id, fleet_id, id, 'viewed', $5, $6, $7
 			  from t
@@ -431,7 +431,7 @@ func lockFleet(ctx context.Context, tx pgx.Tx, organizationID, fleetID uuid.UUID
 	}
 	err := tx.QueryRow(ctx, `
 		select 1
-		  from telflo_opamp.fleets
+		  from opamp_server.fleets
 		 where organization_id = $1 and id = $2
 		   for key share`,
 		organizationID, fleetID).Scan(new(int))
@@ -448,7 +448,7 @@ func lockFleet(ctx context.Context, tx pgx.Tx, organizationID, fleetID uuid.UUID
 func lockOrganization(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID) (bool, error) {
 	err := tx.QueryRow(ctx, `
 		select 1
-		  from telflo_opamp.organizations
+		  from opamp_server.organizations
 		 where id = $1
 		   for key share`,
 		organizationID).Scan(new(int))
@@ -474,7 +474,7 @@ func (s *Postgres) ListEvents(ctx context.Context, organizationID, fleetID uuid.
 	defer func() { end(answerOrFailure(err)) }()
 	query := `
 		select id, organization_id, fleet_id, enrollment_token_id, event, actor_id, actor_email, occurred_at
-		  from telflo_opamp.enrollment_token_events
+		  from opamp_server.enrollment_token_events
 		 where organization_id = $1 and fleet_id = $2`
 	args := []any{organizationID, fleetID, limit + 1}
 	if after != nil {
@@ -521,7 +521,7 @@ func (s *Postgres) GetActiveRotate(ctx context.Context, organizationID, fleetID 
 	defer func() { end(answerOrFailure(err)) }()
 	rows, err := s.pool.Query(ctx, `
 		select `+columns+`
-		  from telflo_opamp.enrollment_tokens
+		  from opamp_server.enrollment_tokens
 		 where organization_id = $1 and fleet_id = $2 and kind = 'rotate'
 		   and revoked_at is null and (expires_at is null or expires_at > $3)
 		 `+currentOrder+`
@@ -553,7 +553,7 @@ const rotateStatesStatement = `
 	       max(expires_at) filter (where do_refresh and not is_current)
 	  from (select fleet_id, expires_at, do_refresh, created_at, id,
 	               row_number() over (partition by fleet_id ` + currentOrder + `) = 1 as is_current
-	          from telflo_opamp.enrollment_tokens
+	          from opamp_server.enrollment_tokens
 	         where organization_id = $1 and fleet_id = any ($2) and kind = 'rotate'
 	           and revoked_at is null and (expires_at is null or expires_at > $3)) v
 	 group by fleet_id`
@@ -610,8 +610,8 @@ func (s *Postgres) Lookup(ctx context.Context, id uuid.UUID) (a Authenticated, e
 	defer func() { end(answerOrFailure(err)) }()
 	rows, err := s.pool.Query(ctx, `
 		select `+prefixed+`, f.type, f.status
-		  from telflo_opamp.enrollment_tokens t
-		  join telflo_opamp.fleets f
+		  from opamp_server.enrollment_tokens t
+		  join opamp_server.fleets f
 		    on f.organization_id = t.organization_id and f.id = t.fleet_id
 		 where t.id = $1`,
 		id)

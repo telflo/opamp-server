@@ -739,7 +739,7 @@ func TestTheWantedStampIsTheSameFromEverySource(t *testing.T) {
 // test can.
 func pinPastTheCheck(t *testing.T, s *Stores, collectorID, publicationID uuid.UUID) {
 	t.Helper()
-	if _, err := s.Databases.Owner.Exec(ctx, `update telflo_opamp.collector_instances set pinned_publication_id = $2
+	if _, err := s.Databases.Owner.Exec(ctx, `update opamp_server.collector_instances set pinned_publication_id = $2
 		where id = $1`, collectorID, publicationID); err != nil {
 		t.Fatal(err)
 	}
@@ -920,7 +920,7 @@ func TestSyncAVersionWithoutStoredNamesIgnoresVariables(t *testing.T) {
 // store: what a version published before migration 00012 holds.
 func forgetNames(t *testing.T, s *Stores, publicationID uuid.UUID) {
 	t.Helper()
-	if tag, err := s.Databases.Owner.Exec(ctx, `delete from telflo_opamp.publication_variable_names
+	if tag, err := s.Databases.Owner.Exec(ctx, `delete from opamp_server.publication_variable_names
 		where publication_id = $1`, publicationID); err != nil || tag.RowsAffected() == 0 {
 		t.Fatalf("deleting the names: %v, %v", tag, err)
 	}
