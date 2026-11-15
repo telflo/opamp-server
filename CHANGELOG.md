@@ -5,7 +5,7 @@ act when you upgrade; [docs/upgrading.md](docs/upgrading.md) says what to
 do. Each release's binaries, image and chart are on its
 [GitHub release](https://github.com/telflo/opamp-server/releases).
 
-## Unreleased
+## 0.3.0 (2026-11-15)
 
 - **Breaking.** The database, its schema and its roles are renamed, so
   they name this server and leave room for other Telflo databases beside
@@ -14,6 +14,9 @@ do. Each release's binaries, image and chart are on its
   and `telflo_opamp_server`. The chart's `postgres.database` and
   `externalDatabase.database` default to the new name. A 0.2.4 database
   isn't renamed in place: [docs/upgrading.md](docs/upgrading.md).
+- Built with Go 1.27.4, which fixes a `net/http` vulnerability in Go
+  1.27.3 (GO-2026-6859).
+- pgx, the PostgreSQL driver, is 5.13.0.
 
 ## 0.2.4 (2026-11-07)
 
