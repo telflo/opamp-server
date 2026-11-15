@@ -44,7 +44,7 @@ grep " opamp-server_${os}_${arch}.tar.gz\$" checksums.txt | shasum -a 256 -c -
 tar xzf "opamp-server_${os}_${arch}.tar.gz"
 ```
 
-**Your own build:** from a checkout, with Go 1.27.3, build the binary into
+**Your own build:** from a checkout, with Go 1.27.4, build the binary into
 the folder and copy the script beside it:
 
 ```sh

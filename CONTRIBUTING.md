@@ -46,7 +46,7 @@ That works once every module the gates need has been downloaded once.
 
 ## The toolchain
 
-- **Go 1.27.3**, as `go.mod`'s `go` line says, and **`GOTOOLCHAIN=local`
+- **Go 1.27.4**, as `go.mod`'s `go` line says, and **`GOTOOLCHAIN=local`
   for every Go command**: the Makefile, the scripts and the image set it,
   and so should you. Without it, a dependency that asks for a newer Go
   makes the `go` command download one, and the build silently stops being
