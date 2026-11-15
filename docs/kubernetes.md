@@ -20,7 +20,7 @@ kubectl -n opamp create secret generic opamp-server \
 kubectl -n opamp create secret generic opamp-server-postgres --from-file=postgres-password
 
 # 2. The chart. publicUrl is the agent endpoint's URL as collectors reach it.
-helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.2.4 -n opamp \
+helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.3.0 -n opamp \
   --set auth.existingSecret=opamp-server \
   --set postgres.auth.existingSecret=opamp-server-postgres \
   --set server.publicUrl=https://opamp.example.com/opamp/api/v1

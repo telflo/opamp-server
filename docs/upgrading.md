@@ -8,12 +8,13 @@ Each release, and the schema it brings a database to:
 
 | Release | Schema |
 |---|---|
+| 0.3.0 | 13 |
 | 0.2.4 | 13 |
 
 0.2.4 is the first public release. From the next one on, a section here
 for each release says what its upgrade needs from you.
 
-## Unreleased: the database's new names
+## 0.3.0: the database's new names
 
 The database, schema and roles have new names (`telflo_opamp_server`,
 `opamp_server`, `telflo_opamp_server_owner`,
