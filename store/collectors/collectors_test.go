@@ -27,7 +27,7 @@ import (
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests").
-const testDatabase = "telflo_opamp_collectors_test"
+const testDatabase = "telflo_opamp_server_collectors_test"
 
 var ctx = context.Background()
 
@@ -822,7 +822,7 @@ func TestACleanupOnAnEndedContextFailsAndDeletesNothing(t *testing.T) {
 func insertErrors(t *testing.T, s *Stores, c collectors.Collector, n int, at time.Time) {
 	t.Helper()
 	if _, err := s.Databases.Owner.Exec(ctx, `
-		insert into telflo_opamp.collector_errors (id, organization_id, collector_instance_id, reported_at, message)
+		insert into opamp_server.collector_errors (id, organization_id, collector_instance_id, reported_at, message)
 		select gen_random_uuid(), $1, $2, $3, 'old' from generate_series(1, $4)`,
 		c.OrganizationID, c.ID, Millisecond(at), n); err != nil {
 		t.Fatal(err)
@@ -914,7 +914,7 @@ func assignGroup(t *testing.T, s *Stores, c fleets.Creation, group, publication 
 func revision(t *testing.T, s *Stores, org uuid.UUID) int64 {
 	t.Helper()
 	var r int64
-	if err := s.Databases.Owner.QueryRow(ctx, `select variables_revision from telflo_opamp.organizations where id = $1`,
+	if err := s.Databases.Owner.QueryRow(ctx, `select variables_revision from opamp_server.organizations where id = $1`,
 		org).Scan(&r); err != nil {
 		t.Fatal(err)
 	}

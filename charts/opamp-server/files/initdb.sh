@@ -7,7 +7,7 @@
 #
 # The two passwords reach bootstrap.sql through this process's environment
 # (OPAMP_OWNER_PASSWORD and OPAMP_RUNTIME_PASSWORD, read with \getenv), never
-# a command line. The database's name is OPAMP_DATABASE_NAME, telflo_opamp
+# a command line. The database's name is OPAMP_DATABASE_NAME, telflo_opamp_server
 # when unset.
 #
 # log_min_error_statement=panic keeps a failing statement out of Postgres's
@@ -17,4 +17,4 @@ set -eu
 PGOPTIONS='-c log_min_error_statement=panic'
 export PGOPTIONS
 exec psql -X -v ON_ERROR_STOP=1 --no-password --username "$POSTGRES_USER" --dbname postgres \
-  -v database="${OPAMP_DATABASE_NAME:-telflo_opamp}" -f /opamp-bootstrap/bootstrap.sql
+  -v database="${OPAMP_DATABASE_NAME:-telflo_opamp_server}" -f /opamp-bootstrap/bootstrap.sql

@@ -163,7 +163,7 @@ postgres:
     # the Postgres superuser's password, which never leaves this pod.
     existingSecret: ""
   # The opamp-server's database, made by the bootstrap.
-  database: telflo_opamp
+  database: telflo_opamp_server
   persistence:
     size: 8Gi
     # Empty: the cluster's default storage class.
@@ -180,7 +180,7 @@ externalDatabase:
   # Required: its host name or IP address.
   host: ""
   port: 5432
-  database: telflo_opamp
+  database: telflo_opamp_server
   # Required: the libpq sslmode the server connects with, for example
   # verify-full.
   sslmode: ""

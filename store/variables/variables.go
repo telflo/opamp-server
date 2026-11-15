@@ -3,7 +3,7 @@
 // `${org:NAME}` references in with.
 //
 // Its implementation is Postgres (what `serve` uses, on
-// telflo_opamp.variables, variable_groups and variable_group_overrides,
+// opamp_server.variables, variable_groups and variable_group_overrides,
 // migration 00012), and the contract tests hold it to these rules:
 //
 //   - every method takes the organization, and touches its rows only: a

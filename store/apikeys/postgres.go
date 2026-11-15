@@ -15,8 +15,8 @@ import (
 	"github.com/telflo/opamp-server/telemetry"
 )
 
-// Postgres is the Store `serve` uses, on telflo_opamp.api_keys and
-// api_key_organizations, as telflo_opamp (select and insert on both, and
+// Postgres is the Store `serve` uses, on opamp_server.api_keys and
+// api_key_organizations, as telflo_opamp_server (select and insert on both, and
 // update on a key's name, description, revoked_at and last_used_at only).
 // Every statement names the schema.
 //
@@ -36,7 +36,7 @@ var _ Store = (*Postgres)(nil)
 // createLock is the transaction-level advisory lock Create holds while it
 // counts the valid keys and inserts, so two Creates take turns and can't
 // both pass the count.
-const createLock = "telflo_opamp.api_keys create"
+const createLock = "opamp_server.api_keys create"
 
 // columns is every column of a key as k, in the order scanKey reads them,
 // its organizations last (an empty array for a key that opens every
@@ -44,7 +44,7 @@ const createLock = "telflo_opamp.api_keys create"
 const columns = `k.id, k.name, k.description, k.secret_sha256, k.all_organizations,
 	k.expires_at, k.revoked_at, k.last_used_at, k.created_at,
 	array(select o.organization_id
-	        from telflo_opamp.api_key_organizations o
+	        from opamp_server.api_key_organizations o
 	       where o.api_key_id = k.id
 	       order by o.organization_id)`
 
@@ -69,7 +69,7 @@ func (s *Postgres) Create(ctx context.Context, k NewKey) (stored Key, err error)
 		var active int
 		if err := tx.QueryRow(ctx, `
 			select count(*)
-			  from telflo_opamp.api_keys
+			  from opamp_server.api_keys
 			 where revoked_at is null and expires_at > $1`,
 			k.CreatedAt).Scan(&active); err != nil {
 			return err
@@ -78,7 +78,7 @@ func (s *Postgres) Create(ctx context.Context, k NewKey) (stored Key, err error)
 			return ErrLimitReached
 		}
 		if _, err := tx.Exec(ctx, `
-			insert into telflo_opamp.api_keys (id, name, description, secret_sha256, all_organizations,
+			insert into opamp_server.api_keys (id, name, description, secret_sha256, all_organizations,
 			                                   expires_at, revoked_at, last_used_at, created_at)
 			values ($1, $2, $3, $4, $5, $6, null, null, $7)`,
 			k.ID, k.Name, k.Description, k.SecretSHA256[:], k.AllOrganizations, k.ExpiresAt, k.CreatedAt); err != nil {
@@ -86,7 +86,7 @@ func (s *Postgres) Create(ctx context.Context, k NewKey) (stored Key, err error)
 		}
 		if !k.AllOrganizations {
 			if _, err := tx.Exec(ctx, `
-				insert into telflo_opamp.api_key_organizations (organization_id, api_key_id)
+				insert into opamp_server.api_key_organizations (organization_id, api_key_id)
 				select organization_id, $2 from unnest($1::uuid[]) as organization_id`,
 				k.OrganizationIDs, k.ID); err != nil {
 				return err
@@ -113,7 +113,7 @@ func (s *Postgres) List(ctx context.Context) (keys []Key, err error) {
 	defer func() { end(err) }()
 	rows, err := s.pool.Query(ctx, `
 		select `+columns+`
-		  from telflo_opamp.api_keys k
+		  from opamp_server.api_keys k
 		 order by k.created_at desc, k.id desc`)
 	if err != nil {
 		return nil, fmt.Errorf("apikeys: list: %w", err)
@@ -203,7 +203,7 @@ func (s *Postgres) Touch(ctx context.Context, id uuid.UUID, at time.Time) (err e
 	ctx, end := telemetry.StartDBSpan(ctx, "api_keys.touch")
 	defer func() { end(err) }()
 	if _, err := s.pool.Exec(ctx, `
-		update telflo_opamp.api_keys
+		update opamp_server.api_keys
 		   set last_used_at = $2
 		 where id = $1 and (last_used_at is null or last_used_at < $2)`,
 		id, at.UTC().Truncate(Precision)); err != nil {
@@ -221,7 +221,7 @@ type queryer interface {
 func get(ctx context.Context, q queryer, id uuid.UUID) (Authenticated, error) {
 	rows, err := q.Query(ctx, `
 		select `+columns+`
-		  from telflo_opamp.api_keys k
+		  from opamp_server.api_keys k
 		 where k.id = $1`,
 		id)
 	if err != nil {
@@ -234,12 +234,12 @@ func get(ctx context.Context, q queryer, id uuid.UUID) (Authenticated, error) {
 	return a, err
 }
 
-// updateReturning runs `update telflo_opamp.api_keys <change>` and reads the
+// updateReturning runs `update opamp_server.api_keys <change>` and reads the
 // key it changed, or ErrNotFound when it changed none.
 func updateReturning(ctx context.Context, q queryer, change string, args ...any) (Authenticated, error) {
 	rows, err := q.Query(ctx, `
 		with k as (
-		  update telflo_opamp.api_keys `+change+`
+		  update opamp_server.api_keys `+change+`
 		  returning *
 		)
 		select `+columns+`

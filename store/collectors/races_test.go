@@ -75,7 +75,7 @@ func TestTwoSessionsEnrollingOneInstanceUIDMakeOneRow(t *testing.T) {
 			e := enrollment(c, fmt.Sprintf("edge-%02d", round), Now)
 			release := func() {}
 			if round == 0 {
-				release = blockOn(t, s, 2, `select 1 from telflo_opamp.organizations where id = $1 for update`, OrgA)
+				release = blockOn(t, s, 2, `select 1 from opamp_server.organizations where id = $1 for update`, OrgA)
 			}
 			var results [2]collectors.Enrolled
 			errs := both(release,
@@ -102,7 +102,7 @@ func TestTwoSessionsEnrollingIntoTheLastSlotOneIsRefused(t *testing.T) {
 		c := s.CreateFleet(t, OrgA, "edge-prod", fleets.TypeServer)
 		enroll(t, s, c, "edge-00", Now)
 		setCap(t, s, OrgA, 2)
-		release := blockOn(t, s, 2, `select 1 from telflo_opamp.organizations where id = $1 for update`, OrgA)
+		release := blockOn(t, s, 2, `select 1 from opamp_server.organizations where id = $1 for update`, OrgA)
 		var results [2]collectors.Enrolled
 		errs := both(release,
 			func() (err error) {
@@ -149,7 +149,7 @@ func TestAnEnrollmentRacingItsGroupsDeleteIsAForeignGroup(t *testing.T) {
 		if _, err := s.Collectors.Move(ctx, OrgA, c.Fleet.ID, member.ID, g.ID, Now); err != nil {
 			t.Fatal(err)
 		}
-		release := blockOn(t, s, 2, `select 1 from telflo_opamp.collector_instances
+		release := blockOn(t, s, 2, `select 1 from opamp_server.collector_instances
 			where organization_id = $1 and id = $2 for update`, OrgA, member.ID)
 
 		var deleted bool
@@ -189,7 +189,7 @@ func TestAnEnrollmentRacingItsGroupsDeleteIsAForeignGroup(t *testing.T) {
 func TestAnEnrollmentRacingItsFleetsDeleteDoesNotDeadlock(t *testing.T) {
 	Each(t, testDatabase, func(t *testing.T, s *Stores) {
 		c := s.CreateFleet(t, OrgA, "edge-prod", fleets.TypeServer)
-		release := blockOn(t, s, 2, `select 1 from telflo_opamp.collector_groups
+		release := blockOn(t, s, 2, `select 1 from opamp_server.collector_groups
 			where organization_id = $1 and id = $2 for update`, OrgA, c.DefaultGroupID)
 		var r collectors.Enrolled
 		var fleetDeleted bool
@@ -235,7 +235,7 @@ func TestTwoCleanupsAtOnceOneDeletesTheOtherDoesNotHoldTheLock(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = blocker.Rollback(ctx) }()
-		if _, err := blocker.Exec(ctx, `select 1 from telflo_opamp.collector_errors
+		if _, err := blocker.Exec(ctx, `select 1 from opamp_server.collector_errors
 			where organization_id = $1 and collector_instance_id = $2 limit 1 for update`, OrgA, got.ID); err != nil {
 			t.Fatal(err)
 		}

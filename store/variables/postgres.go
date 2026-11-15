@@ -17,8 +17,8 @@ import (
 	"github.com/telflo/opamp-server/telemetry"
 )
 
-// Postgres is the Store `serve` uses, on telflo_opamp.variables,
-// variable_groups and variable_group_overrides, as telflo_opamp with its
+// Postgres is the Store `serve` uses, on opamp_server.variables,
+// variable_groups and variable_group_overrides, as telflo_opamp_server with its
 // grants (migration 00012), and on organizations.variables_revision, the
 // counter. Every statement names the schema, and every query filters on
 // organization_id first.
@@ -82,13 +82,13 @@ const variableColumns = `id, organization_id, name, value, description,
 const groupColumns = `g.id, g.organization_id, g.name, g.description,
 	g.changed_by_id, g.changed_by_email, g.changed_at,
 	(select count(*)
-	   from telflo_opamp.variable_group_overrides o
+	   from opamp_server.variable_group_overrides o
 	  where o.organization_id = $1 and o.variable_group_id = g.id and o.value is not null),
 	(select count(*)
-	   from telflo_opamp.collector_groups c
+	   from opamp_server.collector_groups c
 	  where c.organization_id = $1 and c.variable_group_id = g.id),
 	(select count(*)
-	   from telflo_opamp.collector_instances i
+	   from opamp_server.collector_instances i
 	  where i.organization_id = $1 and i.pinned_variable_group_id = g.id)`
 
 // write runs fn in one transaction after the organization's row, its first
@@ -112,7 +112,7 @@ func (s *Postgres) ListVariables(ctx context.Context, organizationID uuid.UUID) 
 	defer func() { end(err) }()
 	rows, err := s.pool.Query(ctx, `
 		select `+variableColumns+`
-		  from telflo_opamp.variables
+		  from opamp_server.variables
 		 where organization_id = $1
 		 order by name collate "C"`,
 		organizationID)
@@ -161,10 +161,10 @@ func (s *Postgres) CreateVariable(ctx context.Context, v NewVariable) (result Cr
 		if err := tx.QueryRow(ctx, `
 			select exists (
 			         select 1
-			           from telflo_opamp.variables
+			           from opamp_server.variables
 			          where organization_id = $1 and name = $2),
 			       (select count(*)
-			          from telflo_opamp.variables
+			          from opamp_server.variables
 			         where organization_id = $1)`,
 			v.OrganizationID, v.Name).Scan(&taken, &count); err != nil {
 			return err
@@ -181,7 +181,7 @@ func (s *Postgres) CreateVariable(ctx context.Context, v NewVariable) (result Cr
 			return bumpFailed(err)
 		}
 		rows, err := tx.Query(ctx, `
-			insert into telflo_opamp.variables (id, organization_id, name, value, description,
+			insert into opamp_server.variables (id, organization_id, name, value, description,
 			  changed_by_id, changed_by_email, changed_at, stamp)
 			values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			on conflict do nothing
@@ -264,14 +264,14 @@ func (s *Postgres) UpdateVariable(ctx context.Context, organizationID, id uuid.U
 			stamp = &n
 		}
 		rows, err := tx.Query(ctx, `
-			update telflo_opamp.variables
+			update opamp_server.variables
 			   set name = $3, value = $4, description = $5,
 			       changed_by_id = $6, changed_by_email = $7, changed_at = $8,
 			       stamp = coalesce($9, stamp)
 			 where organization_id = $1 and id = $2
 			   and not exists (
 			         select 1
-			           from telflo_opamp.variables x
+			           from opamp_server.variables x
 			          where x.organization_id = $1 and x.name = $3 and x.id <> $2)
 			returning `+variableColumns,
 			organizationID, id, next.Name, next.Value, next.Description, actorID, actorEmail, at(now), stamp)
@@ -322,7 +322,7 @@ func (s *Postgres) DeleteVariable(ctx context.Context, organizationID, id uuid.U
 			return bumpFailed(err)
 		}
 		_, err = tx.Exec(ctx, `
-			delete from telflo_opamp.variables
+			delete from opamp_server.variables
 			 where organization_id = $1 and id = $2`,
 			organizationID, id)
 		return err
@@ -343,7 +343,7 @@ func (s *Postgres) ListGroups(ctx context.Context, organizationID uuid.UUID) (li
 	defer func() { end(err) }()
 	rows, err := s.pool.Query(ctx, `
 		select `+groupColumns+`
-		  from telflo_opamp.variable_groups g
+		  from opamp_server.variable_groups g
 		 where g.organization_id = $1
 		 order by g.name collate "C"`,
 		organizationID)
@@ -391,10 +391,10 @@ func (s *Postgres) CreateGroup(ctx context.Context, g NewGroup) (result CreateRe
 		if err := tx.QueryRow(ctx, `
 			select exists (
 			         select 1
-			           from telflo_opamp.variable_groups
+			           from opamp_server.variable_groups
 			          where organization_id = $1 and name = $2),
 			       (select count(*)
-			          from telflo_opamp.variable_groups
+			          from opamp_server.variable_groups
 			         where organization_id = $1)`,
 			g.OrganizationID, g.Name).Scan(&taken, &count); err != nil {
 			return err
@@ -407,7 +407,7 @@ func (s *Postgres) CreateGroup(ctx context.Context, g NewGroup) (result CreateRe
 		}
 
 		tag, err := tx.Exec(ctx, `
-			insert into telflo_opamp.variable_groups (id, organization_id, name, description,
+			insert into opamp_server.variable_groups (id, organization_id, name, description,
 			  changed_by_id, changed_by_email, changed_at)
 			values ($1, $2, $3, $4, $5, $6, $7)
 			on conflict do nothing`,
@@ -449,8 +449,8 @@ func (s *Postgres) GetGroup(ctx context.Context, organizationID, id uuid.UUID) (
 		}
 		rows, err := tx.Query(ctx, `
 			select o.variable_group_id, o.variable_id, o.value, o.changed_by_id, o.changed_by_email, o.changed_at
-			  from telflo_opamp.variable_group_overrides o
-			  join telflo_opamp.variables v
+			  from opamp_server.variable_group_overrides o
+			  join opamp_server.variables v
 			    on v.organization_id = $1 and v.id = o.variable_id
 			 where o.organization_id = $1 and o.variable_group_id = $2 and o.value is not null
 			 order by v.name collate "C"`,
@@ -498,7 +498,7 @@ func (s *Postgres) UpdateGroup(ctx context.Context, organizationID, id uuid.UUID
 			if err := tx.QueryRow(ctx, `
 				select exists (
 				         select 1
-				           from telflo_opamp.variable_groups
+				           from opamp_server.variable_groups
 				          where organization_id = $1 and name = $2)`,
 				organizationID, next.Name).Scan(&taken); err != nil {
 				return err
@@ -512,13 +512,13 @@ func (s *Postgres) UpdateGroup(ctx context.Context, organizationID, id uuid.UUID
 			return nil
 		}
 		tag, err := tx.Exec(ctx, `
-			update telflo_opamp.variable_groups
+			update opamp_server.variable_groups
 			   set name = $3, description = $4,
 			       changed_by_id = $5, changed_by_email = $6, changed_at = $7
 			 where organization_id = $1 and id = $2
 			   and not exists (
 			         select 1
-			           from telflo_opamp.variable_groups x
+			           from opamp_server.variable_groups x
 			          where x.organization_id = $1 and x.name = $3 and x.id <> $2)`,
 			organizationID, id, next.Name, next.Description, actorID, actorEmail, at(now))
 		switch {
@@ -567,7 +567,7 @@ func (s *Postgres) DeleteGroup(ctx context.Context, organizationID, id uuid.UUID
 			}
 			s.hook(attempt, "delete")
 			_, err = tx.Exec(ctx, `
-				delete from telflo_opamp.variable_groups
+				delete from opamp_server.variable_groups
 				 where organization_id = $1 and id = $2`,
 				organizationID, id)
 			return err
@@ -623,13 +623,13 @@ func (s *Postgres) SetOverride(ctx context.Context, organizationID, groupID, var
 			return bumpFailed(err)
 		}
 		statement := `
-			insert into telflo_opamp.variable_group_overrides (organization_id, variable_group_id, variable_id,
+			insert into opamp_server.variable_group_overrides (organization_id, variable_group_id, variable_id,
 			  value, changed_by_id, changed_by_email, changed_at, stamp)
 			values ($1, $2, $3, $4, $5, $6, $7, $8)
 			returning variable_group_id, variable_id, value, changed_by_id, changed_by_email, changed_at`
 		if found {
 			statement = `
-			update telflo_opamp.variable_group_overrides
+			update opamp_server.variable_group_overrides
 			   set value = $4, changed_by_id = $5, changed_by_email = $6, changed_at = $7, stamp = $8
 			 where organization_id = $1 and variable_group_id = $2 and variable_id = $3
 			returning variable_group_id, variable_id, value, changed_by_id, changed_by_email, changed_at`
@@ -674,7 +674,7 @@ func (s *Postgres) ResetOverride(ctx context.Context, organizationID, groupID, v
 			return bumpFailed(err)
 		}
 		if _, err := tx.Exec(ctx, `
-			update telflo_opamp.variable_group_overrides
+			update opamp_server.variable_group_overrides
 			   set value = null, changed_by_id = $4, changed_by_email = $5, changed_at = $6, stamp = $7
 			 where organization_id = $1 and variable_group_id = $2 and variable_id = $3`,
 			organizationID, groupID, variableID, actorID, actorEmail, at(now), stamp); err != nil {
@@ -712,12 +712,12 @@ func (s *Postgres) Variables(ctx context.Context, organizationID uuid.UUID, grou
 		       greatest(po.stamp,
 		                case when po.value is null then gro.stamp end,
 		                case when po.value is null and gro.value is null then v.stamp end)
-		  from telflo_opamp.organizations o
-		  left join telflo_opamp.variables v
+		  from opamp_server.organizations o
+		  left join opamp_server.variables v
 		    on v.organization_id = $1
-		  left join telflo_opamp.variable_group_overrides gro
+		  left join opamp_server.variable_group_overrides gro
 		    on gro.organization_id = $1 and gro.variable_group_id = $2::uuid and gro.variable_id = v.id
-		  left join telflo_opamp.variable_group_overrides po
+		  left join opamp_server.variable_group_overrides po
 		    on po.organization_id = $1 and po.variable_group_id = $3::uuid and po.variable_id = v.id
 		 where o.id = $1`,
 		organizationID, groupVariableGroupID, pinnedVariableGroupID)
@@ -775,11 +775,11 @@ func (s *Postgres) overrideTarget(ctx context.Context, tx pgx.Tx, organizationID
 	if err := tx.QueryRow(ctx, `
 		select exists (
 		         select 1
-		           from telflo_opamp.variable_groups
+		           from opamp_server.variable_groups
 		          where organization_id = $1 and id = $2),
 		       exists (
 		         select 1
-		           from telflo_opamp.variables
+		           from opamp_server.variables
 		          where organization_id = $1 and id = $3)`,
 		organizationID, groupID, variableID).Scan(&groupFound, &variableFound); err != nil {
 		return overrideRow{}, false, err
@@ -793,7 +793,7 @@ func (s *Postgres) overrideTarget(ctx context.Context, tx pgx.Tx, organizationID
 	row = overrideRow{groupID: groupID, variableID: variableID}
 	err = tx.QueryRow(ctx, `
 		select value, changed_by_id, changed_by_email, changed_at
-		  from telflo_opamp.variable_group_overrides
+		  from opamp_server.variable_group_overrides
 		 where organization_id = $1 and variable_group_id = $2 and variable_id = $3`,
 		organizationID, groupID, variableID).Scan(&row.value, &row.changedByID, &row.changedByEmail, &row.changedAt)
 	switch {
@@ -809,7 +809,7 @@ func (s *Postgres) overrideTarget(ctx context.Context, tx pgx.Tx, organizationID
 // override's change in it (display only).
 func touchGroup(ctx context.Context, tx pgx.Tx, organizationID, groupID uuid.UUID, actorID *uuid.UUID, actorEmail *string, now time.Time) error {
 	_, err := tx.Exec(ctx, `
-		update telflo_opamp.variable_groups
+		update opamp_server.variable_groups
 		   set changed_by_id = $3, changed_by_email = $4, changed_at = $5
 		 where organization_id = $1 and id = $2`,
 		organizationID, groupID, actorID, actorEmail, at(now))
@@ -820,7 +820,7 @@ func touchGroup(ctx context.Context, tx pgx.Tx, organizationID, groupID uuid.UUI
 func getVariable(ctx context.Context, tx pgx.Tx, organizationID, id uuid.UUID) (Variable, bool, error) {
 	rows, err := tx.Query(ctx, `
 		select `+variableColumns+`
-		  from telflo_opamp.variables
+		  from opamp_server.variables
 		 where organization_id = $1 and id = $2`,
 		organizationID, id)
 	if err != nil {
@@ -840,7 +840,7 @@ func getVariable(ctx context.Context, tx pgx.Tx, organizationID, id uuid.UUID) (
 func getGroup(ctx context.Context, tx pgx.Tx, organizationID, id uuid.UUID) (Group, bool, error) {
 	rows, err := tx.Query(ctx, `
 		select `+groupColumns+`
-		  from telflo_opamp.variable_groups g
+		  from opamp_server.variable_groups g
 		 where g.organization_id = $1 and g.id = $2`,
 		organizationID, id)
 	if err != nil {
@@ -862,7 +862,7 @@ func nameTaken(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID, name st
 	err := tx.QueryRow(ctx, `
 		select exists (
 		         select 1
-		           from telflo_opamp.variables
+		           from opamp_server.variables
 		          where organization_id = $1 and name = $2)`,
 		organizationID, name).Scan(&taken)
 	return taken, err

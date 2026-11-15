@@ -13,9 +13,9 @@ import (
 	"github.com/telflo/opamp-server/telemetry"
 )
 
-// Postgres is the Store `serve` uses, on telflo_opamp.publications, as
-// telflo_opamp (select, insert and delete; no update), and on
-// telflo_opamp.publication_variable_names (select and insert: its rows go
+// Postgres is the Store `serve` uses, on opamp_server.publications, as
+// telflo_opamp_server (select, insert and delete; no update), and on
+// opamp_server.publication_variable_names (select and insert: its rows go
 // with their publication by the cascade). Every statement names
 // the schema, and every query filters on organization_id first.
 //
@@ -106,12 +106,12 @@ func (s *Postgres) Put(ctx context.Context, p Publication) (result PutResult, st
 	}
 	rows, err := s.pool.Query(ctx, `
 		with inserted as (
-		  insert into telflo_opamp.publications (`+columns+`)
+		  insert into opamp_server.publications (`+columns+`)
 		  values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		  on conflict do nothing
 		  returning `+columns+`
 		), names as (
-		  insert into telflo_opamp.publication_variable_names (organization_id, publication_id, name)
+		  insert into opamp_server.publication_variable_names (organization_id, publication_id, name)
 		  select i.organization_id, i.id, n.name
 		    from inserted i
 		   cross join (select distinct name from unnest($16::text[]) as u (name)) n
@@ -196,7 +196,7 @@ func (s *Postgres) Get(ctx context.Context, organizationID, id uuid.UUID) (p Pub
 func (s *Postgres) get(ctx context.Context, organizationID, id uuid.UUID) (Publication, error) {
 	rows, err := s.pool.Query(ctx, `
 		select `+columns+`
-		  from telflo_opamp.publications
+		  from opamp_server.publications
 		 where organization_id = $1 and id = $2`,
 		organizationID, id)
 	if err != nil {
@@ -222,7 +222,7 @@ func (s *Postgres) List(ctx context.Context, organizationID, configurationID uui
 	// One row more than the page, to know whether another page follows.
 	query := `
 		select ` + summaryColumns + `
-		  from telflo_opamp.publications
+		  from opamp_server.publications
 		 where organization_id = $1 and configuration_id = $2`
 	args := []any{organizationID, configurationID}
 	if after != nil {
@@ -259,7 +259,7 @@ func (s *Postgres) Delete(ctx context.Context, organizationID, id uuid.UUID) (de
 	ctx, end := telemetry.StartDBSpan(ctx, "publications.delete")
 	defer func() { end(inUseIsAnAnswer(err)) }()
 	tag, err := s.pool.Exec(ctx, `
-		delete from telflo_opamp.publications
+		delete from opamp_server.publications
 		 where organization_id = $1 and id = $2`,
 		organizationID, id)
 	if inUse(err) {
@@ -278,7 +278,7 @@ func (s *Postgres) DeleteForConfiguration(ctx context.Context, organizationID, c
 	ctx, end := telemetry.StartDBSpan(ctx, "publications.delete_for_configuration")
 	defer func() { end(inUseIsAnAnswer(err)) }()
 	tag, err := s.pool.Exec(ctx, `
-		delete from telflo_opamp.publications
+		delete from opamp_server.publications
 		 where organization_id = $1 and configuration_id = $2`,
 		organizationID, configurationID)
 	if inUse(err) {
@@ -301,13 +301,13 @@ func (s *Postgres) Usage(ctx context.Context, organizationID, configurationID uu
 		select `+summaryColumns+`,
 		       coalesce(g.fleet_ids, '{}'), coalesce(g.group_ids, '{}'),
 		       (select count(*)
-		          from telflo_opamp.collector_instances c
+		          from opamp_server.collector_instances c
 		         where c.organization_id = $1 and c.pinned_publication_id = p.id)
-		  from telflo_opamp.publications p
+		  from opamp_server.publications p
 		  left join lateral (
 		         select array_agg(cg.fleet_id order by cg.fleet_id, cg.id) as fleet_ids,
 		                array_agg(cg.id order by cg.fleet_id, cg.id) as group_ids
-		           from telflo_opamp.collector_groups cg
+		           from opamp_server.collector_groups cg
 		          where cg.organization_id = $1 and cg.assigned_publication_id = p.id) g on true
 		 where p.organization_id = $1 and p.configuration_id = $2
 		 order by p.published_at desc, p.id desc`,

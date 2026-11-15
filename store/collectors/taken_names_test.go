@@ -142,7 +142,7 @@ func TestTwoRenamesToOneFreeNameAtOnceAreOneRenameAndOneTaken(t *testing.T) {
 		c := s.CreateFleet(t, OrgA, "edge-prod", fleets.TypeServer)
 		first := enroll(t, s, c, "edge-01", Now)
 		second := enroll(t, s, c, "edge-02", Now)
-		release := blockOn(t, s, 2, `select 1 from telflo_opamp.collector_instances
+		release := blockOn(t, s, 2, `select 1 from opamp_server.collector_instances
 			where organization_id = $1 and id in ($2, $3) for update`, OrgA, first.ID, second.ID)
 		errs := both(release,
 			func() error {

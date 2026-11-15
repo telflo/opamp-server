@@ -18,7 +18,7 @@ import (
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests").
-const testDatabase = "telflo_opamp_organizations_test"
+const testDatabase = "telflo_opamp_server_organizations_test"
 
 // stores is a registry and the publications store it cascades to.
 type stores struct {
@@ -27,7 +27,7 @@ type stores struct {
 }
 
 // eachStore runs test against the Postgres registry and its publications
-// store on a fresh, migrated database, as telflo_opamp (the server's role,
+// store on a fresh, migrated database, as telflo_opamp_server (the server's role,
 // with its real grants), in a subtest named "postgres".
 func eachStore(t *testing.T, test func(t *testing.T, s stores)) {
 	t.Run("postgres", func(t *testing.T) {

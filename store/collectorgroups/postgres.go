@@ -16,8 +16,8 @@ import (
 	"github.com/telflo/opamp-server/telemetry"
 )
 
-// Postgres is the Store `serve` uses, on telflo_opamp.collector_groups (and
-// collector_instances, which a group's Delete deletes), as telflo_opamp with its
+// Postgres is the Store `serve` uses, on opamp_server.collector_groups (and
+// collector_instances, which a group's Delete deletes), as telflo_opamp_server with its
 // grants. Every statement names the schema, and every query filters on
 // organization_id first.
 //
@@ -102,7 +102,7 @@ func (s *Postgres) Create(ctx context.Context, g NewGroup) (group Group, err err
 			return err
 		}
 		rows, err := tx.Query(ctx, `
-			insert into telflo_opamp.collector_groups
+			insert into opamp_server.collector_groups
 				(id, organization_id, fleet_id, name, is_default,
 				 assigned_publication_id, annotations, variable_group_id, variable_group_stamp, created_at, updated_at)
 			values ($1, $2, $3, $4, false, $5, $6::jsonb, $8, $9, $7, $7)
@@ -130,7 +130,7 @@ func (s *Postgres) Create(ctx context.Context, g NewGroup) (group Group, err err
 func (s *Postgres) fleetExists(ctx context.Context, organizationID, fleetID uuid.UUID) error {
 	err := s.pool.QueryRow(ctx, `
 		select 1
-		  from telflo_opamp.fleets
+		  from opamp_server.fleets
 		 where organization_id = $1 and id = $2`,
 		organizationID, fleetID).Scan(new(int))
 	switch {
@@ -150,7 +150,7 @@ func (s *Postgres) List(ctx context.Context, organizationID, fleetID uuid.UUID) 
 	defer func() { end(answerOrFailure(err)) }()
 	rows, err := s.pool.Query(ctx, `
 		select `+columns+`
-		  from telflo_opamp.collector_groups
+		  from opamp_server.collector_groups
 		 where organization_id = $1 and fleet_id = $2
 		 order by is_default desc, name collate "C", id`,
 		organizationID, fleetID)
@@ -176,7 +176,7 @@ func (s *Postgres) Get(ctx context.Context, organizationID, fleetID, id uuid.UUI
 	defer func() { end(answerOrFailure(err)) }()
 	rows, err := s.pool.Query(ctx, `
 		select `+columns+`
-		  from telflo_opamp.collector_groups
+		  from opamp_server.collector_groups
 		 where organization_id = $1 and fleet_id = $2 and id = $3`,
 		organizationID, fleetID, id)
 	if err != nil {
@@ -226,7 +226,7 @@ func (s *Postgres) Update(ctx context.Context, organizationID, fleetID, id uuid.
 		}
 		rows, err := tx.Query(ctx, `
 			select `+columns+`
-			  from telflo_opamp.collector_groups
+			  from opamp_server.collector_groups
 			 where organization_id = $1 and fleet_id = $2 and id = $3
 			   `+lock,
 			organizationID, fleetID, id)
@@ -250,13 +250,13 @@ func (s *Postgres) Update(ctx context.Context, organizationID, fleetID, id uuid.
 			return err
 		}
 		rows, err = tx.Query(ctx, `
-			update telflo_opamp.collector_groups
+			update opamp_server.collector_groups
 			   set name = $4, assigned_publication_id = $5, annotations = $6::jsonb, updated_at = $7,
 			       variable_group_id = $8, variable_group_stamp = $9
 			 where organization_id = $1 and fleet_id = $2 and id = $3
 			   and not exists (
 			         select 1
-			           from telflo_opamp.collector_groups x
+			           from opamp_server.collector_groups x
 			          where x.organization_id = $1 and x.fleet_id = $2 and x.name = $4 and x.id <> $3)
 			returning `+columns,
 			organizationID, fleetID, id, next.Name, next.AssignedPublicationID, jsonColumn(next.Annotations),
@@ -317,7 +317,7 @@ func (s *Postgres) delete(ctx context.Context, organizationID, fleetID, id uuid.
 		var isDefault bool
 		err := tx.QueryRow(ctx, `
 			select is_default
-			  from telflo_opamp.collector_groups
+			  from opamp_server.collector_groups
 			 where organization_id = $1 and fleet_id = $2 and id = $3
 			   for update`,
 			organizationID, fleetID, id).Scan(&isDefault)
@@ -331,7 +331,7 @@ func (s *Postgres) delete(ctx context.Context, organizationID, fleetID, id uuid.
 		}
 		if _, err := tx.Exec(ctx, `
 			select 1
-			  from telflo_opamp.collector_instances
+			  from opamp_server.collector_instances
 			 where organization_id = $1 and fleet_id = $2 and collector_group_id = $3
 			 order by id
 			   for update`,
@@ -339,13 +339,13 @@ func (s *Postgres) delete(ctx context.Context, organizationID, fleetID, id uuid.
 			return err
 		}
 		if _, err := tx.Exec(ctx, `
-			delete from telflo_opamp.collector_instances
+			delete from opamp_server.collector_instances
 			 where organization_id = $1 and fleet_id = $2 and collector_group_id = $3`,
 			organizationID, fleetID, id); err != nil {
 			return err
 		}
 		tag, err := tx.Exec(ctx, `
-			delete from telflo_opamp.collector_groups
+			delete from opamp_server.collector_groups
 			 where organization_id = $1 and fleet_id = $2 and id = $3`,
 			organizationID, fleetID, id)
 		deleted = tag.RowsAffected() == 1
@@ -377,7 +377,7 @@ func lockFleet(ctx context.Context, tx pgx.Tx, organizationID, fleetID uuid.UUID
 	} else {
 		err := tx.QueryRow(ctx, `
 			select 1
-			  from telflo_opamp.organizations
+			  from opamp_server.organizations
 			 where id = $1
 			   for key share`,
 			organizationID).Scan(new(int))
@@ -390,7 +390,7 @@ func lockFleet(ctx context.Context, tx pgx.Tx, organizationID, fleetID uuid.UUID
 	}
 	err := tx.QueryRow(ctx, `
 		select 1
-		  from telflo_opamp.fleets
+		  from opamp_server.fleets
 		 where organization_id = $1 and id = $2
 		   for key share`,
 		organizationID, fleetID).Scan(new(int))
@@ -421,7 +421,7 @@ func checkAndStamp(ctx context.Context, tx pgx.Tx, current, next Group) (*int64,
 		if err := exists(ctx, tx, `
 			select exists (
 			  select 1
-			    from telflo_opamp.publications
+			    from opamp_server.publications
 			   where organization_id = $1 and id = $2)`, organizationID, *publication, ErrPublicationNotFound); err != nil {
 			return nil, err
 		}
@@ -430,7 +430,7 @@ func checkAndStamp(ctx context.Context, tx pgx.Tx, current, next Group) (*int64,
 		if err := exists(ctx, tx, `
 			select exists (
 			  select 1
-			    from telflo_opamp.variable_groups
+			    from opamp_server.variable_groups
 			   where organization_id = $1 and id = $2)`, organizationID, *variableGroup, ErrVariableGroupNotFound); err != nil {
 			return nil, err
 		}

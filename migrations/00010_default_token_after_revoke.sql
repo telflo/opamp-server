@@ -15,7 +15,7 @@
 -- First it refuses a database migrated before 00009's edit in place, as
 -- 00011 does: one left at the old 9 (the imports, a migration since
 -- deleted) finds this one pending, and is refused here, untouched, rather
--- than narrowed and then refused by 00011. Its telflo_opamp.imports table,
+-- than narrowed and then refused by 00011. Its opamp_server.imports table,
 -- which no current migration makes, marks it.
 --
 -- Down restores 00008's index. It fails (23505, naming the index) once any
@@ -27,32 +27,32 @@
 -- +goose StatementBegin
 do $$
 begin
-  if to_regclass('telflo_opamp.imports') is not null then
-    raise exception 'this database holds the old imports table (telflo_opamp.imports): recreate it (see the opamp-server README, "A database holding the old imports table")'
+  if to_regclass('opamp_server.imports') is not null then
+    raise exception 'this database holds the old imports table (opamp_server.imports): recreate it (see the opamp-server README, "A database holding the old imports table")'
       using errcode = 'object_not_in_prerequisite_state';
   end if;
 end
 $$;
 -- +goose StatementEnd
 
-drop index telflo_opamp.uq_enrollment_tokens_fleet_id_where_kind_default;
+drop index opamp_server.uq_enrollment_tokens_fleet_id_where_kind_default;
 
 create unique index uq_enrollment_tokens_fleet_id_where_default_not_revoked
-  on telflo_opamp.enrollment_tokens (organization_id, fleet_id)
+  on opamp_server.enrollment_tokens (organization_id, fleet_id)
   where kind = 'default' and revoked_at is null;
 
-comment on index telflo_opamp.uq_enrollment_tokens_fleet_id_where_default_not_revoked is
+comment on index opamp_server.uq_enrollment_tokens_fleet_id_where_default_not_revoked is
   'at most one valid default token per fleet: a default token never expires,
    so valid is not revoked, and a revoked one may be followed by a new one.
    A second issue racing the first loses here. Its name leaves out the
    leading organization_id.';
 
 -- +goose Down
-drop index telflo_opamp.uq_enrollment_tokens_fleet_id_where_default_not_revoked;
+drop index opamp_server.uq_enrollment_tokens_fleet_id_where_default_not_revoked;
 
 create unique index uq_enrollment_tokens_fleet_id_where_kind_default
-  on telflo_opamp.enrollment_tokens (organization_id, fleet_id) where kind = 'default';
+  on opamp_server.enrollment_tokens (organization_id, fleet_id) where kind = 'default';
 
-comment on index telflo_opamp.uq_enrollment_tokens_fleet_id_where_kind_default is
+comment on index opamp_server.uq_enrollment_tokens_fleet_id_where_kind_default is
   'at most one default token per fleet. Its name leaves out the leading
    organization_id.';

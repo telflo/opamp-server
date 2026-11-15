@@ -16,7 +16,7 @@ func WantedStampsForFleets(ctx context.Context, pool *pgxpool.Pool, organization
 	rows, err := pool.Query(ctx, `
 		with `+fleetsWanted.combos+`
 		select c.id,`+fleetsWanted.stamp+`
-		  from telflo_opamp.collector_instances c`+resolutionJoins("c")+fleetsWanted.join+`
+		  from opamp_server.collector_instances c`+resolutionJoins("c")+fleetsWanted.join+`
 		 where c.organization_id = $1 and c.fleet_id = any ($2)`,
 		organizationID, fleetIDs)
 	if err != nil {

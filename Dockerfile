@@ -15,7 +15,7 @@
 #                           OPAMP_MANAGEMENT_PORT and the agent endpoint
 #                           (POST /opamp/api/v1, where collectors poll) on
 #                           OPAMP_AGENT_PORT
-#   migrate up|status       the embedded migrations, as telflo_opamp_owner
+#   migrate up|status       the embedded migrations, as telflo_opamp_server_owner
 #                           (`migrate down --yes-drop-data` is for
 #                           development only)
 #   healthcheck             asks this container's own /health, for the
@@ -93,8 +93,8 @@ WORKDIR /app
 # and OPAMP_MANAGEMENT_PORT's defaults). The variables each subcommand
 # reads, all supplied by the orchestrator (docs/configuration.md documents each):
 #
-#   serve        OPAMP_DATABASE_URL (as telflo_opamp, a member of
-#                telflo_opamp_runtime; its pool_max_conns parameter caps the
+#   serve        OPAMP_DATABASE_URL (as telflo_opamp_server, a member of
+#                telflo_opamp_server_runtime; its pool_max_conns parameter caps the
 #                connection pool, by default the greater of 4 and the CPUs,
 #                and /ready pings on one connection more),
 #                the management API's: OPAMP_MANAGEMENT_SECRET (at least 32
@@ -123,7 +123,7 @@ WORKDIR /app
 #                for telemetry, OTEL_EXPORTER_OTLP_ENDPOINT (export is off
 #                when it is unset; OTEL_COLLECTOR_ADDR is its deprecated
 #                spelling), OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES
-#   migrate      OPAMP_MIGRATION_DATABASE_URL (as telflo_opamp_owner)
+#   migrate      OPAMP_MIGRATION_DATABASE_URL (as telflo_opamp_server_owner)
 #   healthcheck  serve's OPAMP_MANAGEMENT_PORT, OPAMP_MANAGEMENT_HOST and
 #                the two management TLS variables (https when they are set)
 EXPOSE 51234 51235

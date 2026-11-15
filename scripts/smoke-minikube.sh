@@ -104,7 +104,7 @@ FULLNAME=opamp-opamp-server
 SERVER_SECRET=opamp-server
 POSTGRES_SECRET=opamp-server-postgres
 POSTGRES_POD=$FULLNAME-postgres-0
-DATABASE=telflo_opamp
+DATABASE=telflo_opamp_server
 REPLICAS=1
 PUBLISHED_IMAGE_REPOSITORY=ghcr.io/telflo/opamp-server
 PUBLISHED_CHART=oci://ghcr.io/telflo/charts/opamp-server
@@ -1115,8 +1115,8 @@ step "the README's bootstrap re-run applies bootstrap.sql"
 # the same value changes nothing here (its verifier's salt aside, which this
 # never reads).
 CATALOG_POSTGRES_SQL="
-select 'role', rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolvaliduntil, rolpassword is not null from pg_authid where rolname like 'telflo_opamp%' order by rolname;
-select 'member', roleid::regrole, member::regrole, grantor::regrole, admin_option, inherit_option, set_option from pg_auth_members where roleid::regrole::text like 'telflo_opamp%' or member::regrole::text like 'telflo_opamp%' order by 2, 3;
+select 'role', rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolvaliduntil, rolpassword is not null from pg_authid where rolname like 'telflo_opamp_server%' order by rolname;
+select 'member', roleid::regrole, member::regrole, grantor::regrole, admin_option, inherit_option, set_option from pg_auth_members where roleid::regrole::text like 'telflo_opamp_server%' or member::regrole::text like 'telflo_opamp_server%' order by 2, 3;
 select 'database', datname, pg_get_userbyid(datdba), datacl, pg_encoding_to_char(encoding), datcollate, datctype, datallowconn, datconnlimit from pg_database order by datname;
 select 'setting', coalesce(d.datname, '-'), coalesce(r.rolname, '-'), s.setconfig from pg_db_role_setting s left join pg_database d on d.oid = s.setdatabase left join pg_roles r on r.oid = s.setrole order by 2, 3;
 "
@@ -1143,23 +1143,23 @@ tcp_login() {
 }
 # runtime_connect: the runtime role's CONNECT on the database (t or f).
 runtime_connect() {
-  echo "select has_database_privilege('telflo_opamp', '$DATABASE', 'CONNECT');" | psql_postgres postgres 2>>"$LOGS/catalog.err"
+  echo "select has_database_privilege('telflo_opamp_server', '$DATABASE', 'CONNECT');" | psql_postgres postgres 2>>"$LOGS/catalog.err"
 }
 catalog "$STATE/catalog-before.txt"
 [ "$(grep -c '^role|' "$STATE/catalog-before.txt")" -ge 2 ] || fail "the catalog shows fewer than the bootstrap's roles"
-tcp_login OPAMP_OWNER_PASSWORD telflo_opamp_owner && tcp_login OPAMP_RUNTIME_PASSWORD telflo_opamp ||
+tcp_login OPAMP_OWNER_PASSWORD telflo_opamp_server_owner && tcp_login OPAMP_RUNTIME_PASSWORD telflo_opamp_server ||
   fail "a role doesn't log in over TCP with its password before the re-run"
-[ "$(runtime_connect)" = t ] || fail "telflo_opamp has no CONNECT on $DATABASE before the re-run"
+[ "$(runtime_connect)" = t ] || fail "telflo_opamp_server has no CONNECT on $DATABASE before the re-run"
 # Undo two things bootstrap.sql sets, as the superuser: the runtime login's
 # password and its CONNECT. A re-run that didn't apply bootstrap.sql would
 # leave both undone.
-echo "alter role telflo_opamp password null; revoke connect on database $DATABASE from telflo_opamp;" |
+echo "alter role telflo_opamp_server password null; revoke connect on database $DATABASE from telflo_opamp_server;" |
   psql_postgres postgres >"$LOGS/undo.log" 2>&1 || fail "undoing the runtime role's password and CONNECT failed"
 catalog "$STATE/catalog-undone.txt"
 ! cmp -s "$STATE/catalog-before.txt" "$STATE/catalog-undone.txt" || fail "undoing the password and the grant changed nothing in the catalog"
-! tcp_login OPAMP_RUNTIME_PASSWORD telflo_opamp || fail "telflo_opamp still logs in over TCP with its password set to null"
-[ "$(runtime_connect)" = f ] || fail "telflo_opamp still has CONNECT on $DATABASE after the revoke"
-pass "undone first, as the superuser: telflo_opamp's password (its TCP login now fails) and its CONNECT on $DATABASE (now f)"
+! tcp_login OPAMP_RUNTIME_PASSWORD telflo_opamp_server || fail "telflo_opamp_server still logs in over TCP with its password set to null"
+[ "$(runtime_connect)" = f ] || fail "telflo_opamp_server still has CONNECT on $DATABASE after the revoke"
+pass "undone first, as the superuser: telflo_opamp_server's password (its TCP login now fails) and its CONNECT on $DATABASE (now f)"
 note "running, as the README says: $RERUN_COMMAND"
 rerun_status=0
 kube exec "$POSTGRES_POD" -c postgres -- /docker-entrypoint-initdb.d/initdb.sh >"$SECRETS_DIR/bootstrap-rerun.out" 2>&1 || rerun_status=$?
@@ -1170,9 +1170,9 @@ note "its output ($(grep -c . "$SECRETS_DIR/bootstrap-rerun.out") lines, none ho
 redact <"$SECRETS_DIR/bootstrap-rerun.out" | sed 's/^/      /'
 [ "$rerun_status" = 0 ] || fail "the README's bootstrap re-run exited $rerun_status"
 [ -s "$SECRETS_DIR/bootstrap-rerun.out" ] || fail "the README's bootstrap re-run printed nothing: bootstrap.sql didn't run"
-tcp_login OPAMP_RUNTIME_PASSWORD telflo_opamp || fail "after the re-run, telflo_opamp still doesn't log in over TCP: the re-run didn't apply bootstrap.sql"
-tcp_login OPAMP_OWNER_PASSWORD telflo_opamp_owner || fail "after the re-run, telflo_opamp_owner doesn't log in over TCP"
-[ "$(runtime_connect)" = t ] || fail "after the re-run, telflo_opamp still has no CONNECT on $DATABASE: the re-run didn't apply bootstrap.sql"
+tcp_login OPAMP_RUNTIME_PASSWORD telflo_opamp_server || fail "after the re-run, telflo_opamp_server still doesn't log in over TCP: the re-run didn't apply bootstrap.sql"
+tcp_login OPAMP_OWNER_PASSWORD telflo_opamp_server_owner || fail "after the re-run, telflo_opamp_server_owner doesn't log in over TCP"
+[ "$(runtime_connect)" = t ] || fail "after the re-run, telflo_opamp_server still has no CONNECT on $DATABASE: the re-run didn't apply bootstrap.sql"
 catalog "$STATE/catalog-after.txt"
 if ! cmp -s "$STATE/catalog-before.txt" "$STATE/catalog-after.txt"; then
   diff "$STATE/catalog-before.txt" "$STATE/catalog-after.txt" | sed 's/^/      /' >&2 || true

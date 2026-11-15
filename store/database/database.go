@@ -4,15 +4,15 @@
 // checks `serve` runs before it opens any listener.
 //
 // The database, its schema and its roles:
-//   - database telflo_opamp, created with its roles by deploy/bootstrap.sql,
+//   - database telflo_opamp_server, created with its roles by deploy/bootstrap.sql,
 //     run by a superuser;
-//   - schema telflo_opamp, created by `migrate`, named in every statement;
-//   - telflo_opamp_owner owns everything and runs `migrate`
+//   - schema opamp_server, created by `migrate`, named in every statement;
+//   - telflo_opamp_server_owner owns everything and runs `migrate`
 //     (OPAMP_MIGRATION_DATABASE_URL);
-//   - telflo_opamp_runtime (NOLOGIN) holds what the server needs, granted by
+//   - telflo_opamp_server_runtime (NOLOGIN) holds what the server needs, granted by
 //     the migrations;
-//   - telflo_opamp logs in for `serve` (OPAMP_DATABASE_URL), a member of
-//     telflo_opamp_runtime with no DDL rights.
+//   - telflo_opamp_server logs in for `serve` (OPAMP_DATABASE_URL), a member of
+//     telflo_opamp_server_runtime with no DDL rights.
 //
 // No URL or password from either setting is ever put in an error or a log
 // line: a URL that doesn't parse is reported without its text.
@@ -28,14 +28,14 @@ import (
 
 const (
 	// Schema holds every table the opamp-server has.
-	Schema = "telflo_opamp"
+	Schema = "opamp_server"
 	// OwnerRole owns the database, the schema and every table.
-	OwnerRole = "telflo_opamp_owner"
+	OwnerRole = "telflo_opamp_server_owner"
 	// RuntimeRole holds exactly the privileges `serve` needs.
-	RuntimeRole = "telflo_opamp_runtime"
+	RuntimeRole = "telflo_opamp_server_runtime"
 	// ServerRole is the login role bootstrap.sql makes for `serve`. Any login
 	// role that is a member of RuntimeRole will do.
-	ServerRole = "telflo_opamp"
+	ServerRole = "telflo_opamp_server"
 	// VersionTable is goose's record of the applied migrations.
 	VersionTable = Schema + ".goose_db_version"
 	// ServerTable is the one table of the server's own, of no

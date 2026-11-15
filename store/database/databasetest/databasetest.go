@@ -5,7 +5,7 @@
 //     server (locally postgresql://telflo:telflo-local@localhost:55432/postgres).
 //     Without it, tests that need a database skip; CI sets it and fails on any
 //     skipped test.
-//   - One database per package, telflo_opamp_<package>_test, since `go test
+//   - One database per package, telflo_opamp_server_<package>_test, since `go test
 //     ./...` runs packages in parallel. New drops and recreates it, so each
 //     test that calls New starts from an empty, migrated database; a test
 //     package's tests don't run in parallel with each other. The migrated
@@ -41,7 +41,7 @@ const (
 	AdminURLVariable = "OPAMP_TEST_ADMIN_DATABASE_URL"
 
 	// OwnerPassword and RuntimePassword are the development passwords of
-	// telflo_opamp_owner and telflo_opamp, the same as docker-compose.yml's.
+	// telflo_opamp_server_owner and telflo_opamp_server, the same as docker-compose.yml's.
 	OwnerPassword   = "telflo-opamp-owner-local"
 	RuntimePassword = "telflo-opamp-local"
 
@@ -56,7 +56,7 @@ const (
 
 	// provisioningLock serializes role creation across test packages running
 	// at once: a concurrent `create role` fails with 23505 or 42710.
-	provisioningLock = "telflo_opamp.provision_test_roles"
+	provisioningLock = "opamp_server.provision_test_roles"
 
 	// setupTimeout bounds creating, migrating and dropping a database.
 	setupTimeout = 60 * time.Second
@@ -71,7 +71,7 @@ type Databases struct {
 	Name string
 
 	// AdminURL, OwnerURL and RuntimeURL name this database as the superuser,
-	// telflo_opamp_owner and telflo_opamp.
+	// telflo_opamp_server_owner and telflo_opamp_server.
 	AdminURL   string
 	OwnerURL   string
 	RuntimeURL string
@@ -79,9 +79,9 @@ type Databases struct {
 	// Admin is a superuser pool, for what neither role may do: throwaway
 	// roles, deliberate catalog changes.
 	Admin *pgxpool.Pool
-	// Owner is telflo_opamp_owner's pool, for fixtures and reading back.
+	// Owner is telflo_opamp_server_owner's pool, for fixtures and reading back.
 	Owner *pgxpool.Pool
-	// Runtime is telflo_opamp's pool: what `serve` connects as.
+	// Runtime is telflo_opamp_server's pool: what `serve` connects as.
 	Runtime *pgxpool.Pool
 
 	maintenanceURL string
@@ -149,7 +149,7 @@ func CheckName(name string) error {
 }
 
 // Prepare is New without a testing.TB: it creates the roles if missing,
-// drops and recreates the database owned by telflo_opamp_owner, as
+// drops and recreates the database owned by telflo_opamp_server_owner, as
 // bootstrap.sql would set it up, migrates it if migrate is true, and opens a
 // pool as each role. The caller drops it with Drop.
 func Prepare(ctx context.Context, adminURL, name string, migrate bool) (*Databases, error) {
@@ -293,9 +293,9 @@ func createRoles(ctx context.Context, conn *pgx.Conn) error {
 			return err
 		}
 		roles := []struct{ name, create string }{
-			{database.OwnerRole, "create role telflo_opamp_owner login nosuperuser nocreatedb nocreaterole nobypassrls password " + literal(OwnerPassword)},
-			{database.RuntimeRole, "create role telflo_opamp_runtime nologin nosuperuser nocreatedb nocreaterole nobypassrls"},
-			{database.ServerRole, "create role telflo_opamp login nosuperuser nocreatedb nocreaterole nobypassrls inherit password " + literal(RuntimePassword)},
+			{database.OwnerRole, "create role telflo_opamp_server_owner login nosuperuser nocreatedb nocreaterole nobypassrls password " + literal(OwnerPassword)},
+			{database.RuntimeRole, "create role telflo_opamp_server_runtime nologin nosuperuser nocreatedb nocreaterole nobypassrls"},
+			{database.ServerRole, "create role telflo_opamp_server login nosuperuser nocreatedb nocreaterole nobypassrls inherit password " + literal(RuntimePassword)},
 		}
 		for _, role := range roles {
 			var exists bool
@@ -316,12 +316,12 @@ func createRoles(ctx context.Context, conn *pgx.Conn) error {
 			return err
 		}
 		if !isMember {
-			if _, err := tx.Exec(ctx, "grant telflo_opamp_runtime to telflo_opamp with inherit true"); err != nil {
+			if _, err := tx.Exec(ctx, "grant telflo_opamp_server_runtime to telflo_opamp_server with inherit true"); err != nil {
 				return fmt.Errorf("granting %s to %s: %w", database.RuntimeRole, database.ServerRole, err)
 			}
 		}
 		// Its errors logged terse, as bootstrap.sql sets it.
-		if _, err := tx.Exec(ctx, "alter role telflo_opamp set log_error_verbosity = 'terse'"); err != nil {
+		if _, err := tx.Exec(ctx, "alter role telflo_opamp_server set log_error_verbosity = 'terse'"); err != nil {
 			return fmt.Errorf("setting %s's log_error_verbosity: %w", database.ServerRole, err)
 		}
 		return nil
@@ -407,12 +407,12 @@ func recreateDatabase(ctx context.Context, conn *pgx.Conn, name, template string
 	quoted := pgx.Identifier{name}.Sanitize()
 	for _, statement := range []string{
 		"drop database if exists " + quoted + " with (force)",
-		"create database " + quoted + " owner telflo_opamp_owner encoding 'UTF8' template " +
+		"create database " + quoted + " owner telflo_opamp_server_owner encoding 'UTF8' template " +
 			pgx.Identifier{template}.Sanitize(),
 		"revoke connect on database " + quoted + " from public",
-		"grant connect on database " + quoted + " to telflo_opamp_owner, telflo_opamp",
+		"grant connect on database " + quoted + " to telflo_opamp_server_owner, telflo_opamp_server",
 		"revoke temporary on database " + quoted + " from public",
-		"alter role telflo_opamp in database " + quoted + " set search_path = telflo_opamp",
+		"alter role telflo_opamp_server in database " + quoted + " set search_path = opamp_server",
 	} {
 		if _, err := conn.Exec(ctx, statement); err != nil {
 			return fmt.Errorf("preparing the database %s: %w", name, err)
@@ -451,7 +451,7 @@ func (d *Databases) ThrowawayRole(t testing.TB, attributes string) (name, roleUR
 	if _, err := rand.Read(suffix); err != nil {
 		t.Fatal(err)
 	}
-	name = "telflo_opamp_throwaway_" + hex.EncodeToString(suffix)
+	name = "telflo_opamp_server_throwaway_" + hex.EncodeToString(suffix)
 	password := hex.EncodeToString(suffix) + "-password"
 	ctx := context.Background()
 

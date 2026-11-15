@@ -83,28 +83,28 @@ var fill = strings.NewReplacer(
 // B has one server fleet with a collector. Every fleet has its Default
 // group and a default and a rotate token.
 const fixture = `
-insert into telflo_opamp.organizations (id, name, created_at, updated_at) values
+insert into opamp_server.organizations (id, name, created_at, updated_at) values
   ('{orgA}', 'Acme', '{at}', '{at}'),
   ('{orgB}', 'Globex', '{at}', '{at}');
-insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
   version_id, version_number, version_label, yaml, sha256, published_by_id, published_by_email,
   published_at, received_at, collector_distribution, collector_version) values
   ('{pubA}', '{orgA}', gen_random_uuid(), 'payments-gateway', gen_random_uuid(), 3, null,
    'receivers: {}', repeat('a', 64), null, null, '{at}', '{at}', 'otelcol-contrib', '0.162.0'),
   ('{pubB}', '{orgB}', gen_random_uuid(), 'payments-gateway', gen_random_uuid(), 1, null,
    'receivers: {}', repeat('b', 64), null, null, '{at}', '{at}', 'otelcol-contrib', '0.162.0');
-insert into telflo_opamp.fleets (id, organization_id, label, type, status, created_by_id,
+insert into opamp_server.fleets (id, organization_id, label, type, status, created_by_id,
   created_by_email, created_at, updated_at) values
   ('{fleetA1}', '{orgA}', 'edge-prod', 'server', 'active', null, null, '{at}', '{at}'),
   ('{fleetA2}', '{orgA}', 'edge-k8s', 'kubernetes-supervisor', 'active', null, null, '{at}', '{at}'),
   ('{fleetB}', '{orgB}', 'globex-prod', 'server', 'active', null, null, '{at}', '{at}');
-insert into telflo_opamp.collector_groups (id, organization_id, fleet_id, name, is_default,
+insert into opamp_server.collector_groups (id, organization_id, fleet_id, name, is_default,
   assigned_publication_id, created_at, updated_at) values
   ('{groupA1}', '{orgA}', '{fleetA1}', 'Default', true, null, '{at}', '{at}'),
   ('{groupA1Gateways}', '{orgA}', '{fleetA1}', 'gateways', false, null, '{at}', '{at}'),
   ('{groupA2}', '{orgA}', '{fleetA2}', 'Default', true, null, '{at}', '{at}'),
   ('{groupB}', '{orgB}', '{fleetB}', 'Default', true, null, '{at}', '{at}');
-insert into telflo_opamp.enrollment_tokens (id, organization_id, fleet_id, kind, expires_at,
+insert into opamp_server.enrollment_tokens (id, organization_id, fleet_id, kind, expires_at,
   revoked_at, do_refresh, created_by_id, created_by_email, created_at) values
   ('{tokenA1Default}', '{orgA}', '{fleetA1}', 'default', null, null, false, null, null, '{at}'),
   ('{tokenA1Rotate}', '{orgA}', '{fleetA1}', 'rotate', null, null, false, null, null, '{at}'),
@@ -112,7 +112,7 @@ insert into telflo_opamp.enrollment_tokens (id, organization_id, fleet_id, kind,
   ('{tokenA2Rotate}', '{orgA}', '{fleetA2}', 'rotate', null, null, false, null, null, '{at}'),
   ('{tokenBDefault}', '{orgB}', '{fleetB}', 'default', null, null, false, null, null, '{at}'),
   ('{tokenBRotate}', '{orgB}', '{fleetB}', 'rotate', null, null, false, null, null, '{at}');
-insert into telflo_opamp.collector_instances (id, organization_id, fleet_id, collector_group_id,
+insert into opamp_server.collector_instances (id, organization_id, fleet_id, collector_group_id,
   instance_uid, name, enrollment_token_id, last_seen_at, created_at, updated_at) values
   ('{collectorA1}', '{orgA}', '{fleetA1}', '{groupA1}', '{uidA1}', 'edge-01', '{tokenA1Rotate}', '{at}', '{at}', '{at}'),
   ('{collectorB}', '{orgB}', '{fleetB}', '{groupB}', '{uidB}', 'globex-01', '{tokenBRotate}', '{at}', '{at}', '{at}');
@@ -122,11 +122,11 @@ insert into telflo_opamp.collector_instances (id, organization_id, fleet_id, col
 // group, nothing linked yet (migration 00012): A's eu and B's us. A schema
 // before 00012 takes the fixture alone.
 const variablesFixture = `
-insert into telflo_opamp.variables (id, organization_id, name, description, value, changed_by_id,
+insert into opamp_server.variables (id, organization_id, name, description, value, changed_by_id,
   changed_by_email, changed_at, stamp) values
   ('{variableA}', '{orgA}', 'REGION', null, 'eu-west-1', null, null, '{at}', 1),
   ('{variableB}', '{orgB}', 'REGION', null, 'us-east-1', null, null, '{at}', 1);
-insert into telflo_opamp.variable_groups (id, organization_id, name, description, changed_by_id,
+insert into opamp_server.variable_groups (id, organization_id, name, description, changed_by_id,
   changed_by_email, changed_at) values
   ('{variableGroupA}', '{orgA}', 'eu', null, null, null, '{at}'),
   ('{variableGroupB}', '{orgB}', 'us', null, null, null, '{at}');
@@ -136,10 +136,10 @@ insert into telflo_opamp.variable_groups (id, organization_id, name, description
 // 00012 take them; fixtureOrganizationsAt12 as 00012 does, with the
 // generation it added without a default.
 const (
-	fixtureOrganizations = `insert into telflo_opamp.organizations (id, name, created_at, updated_at) values
+	fixtureOrganizations = `insert into opamp_server.organizations (id, name, created_at, updated_at) values
   ('{orgA}', 'Acme', '{at}', '{at}'),
   ('{orgB}', 'Globex', '{at}', '{at}');`
-	fixtureOrganizationsAt12 = `insert into telflo_opamp.organizations (id, name, created_at, updated_at, generation) values
+	fixtureOrganizationsAt12 = `insert into opamp_server.organizations (id, name, created_at, updated_at, generation) values
   ('{orgA}', 'Acme', '{at}', '{at}', gen_random_uuid()),
   ('{orgB}', 'Globex', '{at}', '{at}', gen_random_uuid());`
 )
@@ -167,51 +167,51 @@ func newFleetModel(t *testing.T) *databasetest.Databases {
 // Statements adding one row, the fixture's ids written in by fill. Each
 // leaves every column but those it names valid.
 func newFleet(organization, label, fleetType string) string {
-	return fmt.Sprintf(`insert into telflo_opamp.fleets (id, organization_id, label, type, status,
+	return fmt.Sprintf(`insert into opamp_server.fleets (id, organization_id, label, type, status,
 	  created_by_id, created_by_email, created_at, updated_at)
 	  values (gen_random_uuid(), '%s', %s, '%s', 'active', null, null, '{at}', '{at}')`, organization, label, fleetType)
 }
 
 func newGroup(organization, fleet, name string, isDefault bool) string {
-	return fmt.Sprintf(`insert into telflo_opamp.collector_groups (id, organization_id, fleet_id, name,
+	return fmt.Sprintf(`insert into opamp_server.collector_groups (id, organization_id, fleet_id, name,
 	  is_default, assigned_publication_id, created_at, updated_at)
 	  values (gen_random_uuid(), '%s', '%s', %s, %t, null, '{at}', '{at}')`,
 		organization, fleet, name, isDefault)
 }
 
 func newToken(id, organization, fleet, kind, expiresAt string) string {
-	return fmt.Sprintf(`insert into telflo_opamp.enrollment_tokens (id, organization_id, fleet_id, kind,
+	return fmt.Sprintf(`insert into opamp_server.enrollment_tokens (id, organization_id, fleet_id, kind,
 	  expires_at, revoked_at, do_refresh, created_by_id, created_by_email, created_at)
 	  values (%s, '%s', '%s', '%s', %s, null, false, null, null, '{at}')`, id, organization, fleet, kind, expiresAt)
 }
 
 func newEvent(organization, fleet, token, event string) string {
-	return fmt.Sprintf(`insert into telflo_opamp.enrollment_token_events (id, organization_id, fleet_id,
+	return fmt.Sprintf(`insert into opamp_server.enrollment_token_events (id, organization_id, fleet_id,
 	  enrollment_token_id, event, actor_id, actor_email, occurred_at)
 	  values (gen_random_uuid(), '%s', '%s', '%s', %s, null, null, '{at}')`, organization, fleet, token, event)
 }
 
 func newCollector(organization, fleet, group, uid, name string) string {
-	return fmt.Sprintf(`insert into telflo_opamp.collector_instances (id, organization_id, fleet_id,
+	return fmt.Sprintf(`insert into opamp_server.collector_instances (id, organization_id, fleet_id,
 	  collector_group_id, instance_uid, name, last_seen_at, created_at, updated_at)
 	  values (gen_random_uuid(), '%s', '%s', '%s', %s, %s, '{at}', '{at}', '{at}')`, organization, fleet, group, uid, name)
 }
 
 func newError(organization, collector, message string) string {
-	return fmt.Sprintf(`insert into telflo_opamp.collector_errors (id, organization_id,
+	return fmt.Sprintf(`insert into opamp_server.collector_errors (id, organization_id,
 	  collector_instance_id, reported_at, config_sha256, message)
 	  values (gen_random_uuid(), '%s', '%s', '{at}', null, %s)`, organization, collector, message)
 }
 
 // updateCollectorA1 sets columns of A's collector edge-01.
 func updateCollectorA1(set string) string {
-	return "update telflo_opamp.collector_instances set " + set +
+	return "update opamp_server.collector_instances set " + set +
 		" where organization_id = '{orgA}' and id = '{collectorA1}'"
 }
 
 // updateGroupA1 sets columns of fleet A1's Default group.
 func updateGroupA1(set string) string {
-	return "update telflo_opamp.collector_groups set " + set +
+	return "update opamp_server.collector_groups set " + set +
 		" where organization_id = '{orgA}' and id = '{groupA1}'"
 }
 
@@ -219,25 +219,25 @@ func updateGroupA1(set string) string {
 // published version's referenced name, each with every column but those
 // named valid.
 func newVariable(id, organization, name, value string) string {
-	return fmt.Sprintf(`insert into telflo_opamp.variables (id, organization_id, name, description, value,
+	return fmt.Sprintf(`insert into opamp_server.variables (id, organization_id, name, description, value,
 	  changed_by_id, changed_by_email, changed_at, stamp)
 	  values (%s, '%s', %s, null, %s, null, null, '{at}', 1)`, id, organization, name, value)
 }
 
 func newVariableGroup(id, organization, name string) string {
-	return fmt.Sprintf(`insert into telflo_opamp.variable_groups (id, organization_id, name, description,
+	return fmt.Sprintf(`insert into opamp_server.variable_groups (id, organization_id, name, description,
 	  changed_by_id, changed_by_email, changed_at)
 	  values (%s, '%s', %s, null, null, null, '{at}')`, id, organization, name)
 }
 
 func newOverride(organization, variableGroup, variable, value string) string {
-	return fmt.Sprintf(`insert into telflo_opamp.variable_group_overrides (organization_id, variable_group_id,
+	return fmt.Sprintf(`insert into opamp_server.variable_group_overrides (organization_id, variable_group_id,
 	  variable_id, value, changed_by_id, changed_by_email, changed_at, stamp)
 	  values ('%s', '%s', '%s', %s, null, null, '{at}', 1)`, organization, variableGroup, variable, value)
 }
 
 func newVariableName(organization, publication, name string) string {
-	return fmt.Sprintf(`insert into telflo_opamp.publication_variable_names (organization_id, publication_id, name)
+	return fmt.Sprintf(`insert into opamp_server.publication_variable_names (organization_id, publication_id, name)
 	  values ('%s', '%s', %s)`, organization, publication, name)
 }
 
@@ -246,19 +246,19 @@ var overrideA = newOverride("{orgA}", "{variableGroupA}", "{variableA}", "'eu-ce
 
 // updateVariableA sets columns of A's variable REGION.
 func updateVariableA(set string) string {
-	return "update telflo_opamp.variables set " + set +
+	return "update opamp_server.variables set " + set +
 		" where organization_id = '{orgA}' and id = '{variableA}'"
 }
 
 // updateVariableGroupA sets columns of A's variable group eu.
 func updateVariableGroupA(set string) string {
-	return "update telflo_opamp.variable_groups set " + set +
+	return "update opamp_server.variable_groups set " + set +
 		" where organization_id = '{orgA}' and id = '{variableGroupA}'"
 }
 
 // updateOverrideA sets columns of overrideA, which the caller inserts first.
 func updateOverrideA(set string) string {
-	return "update telflo_opamp.variable_group_overrides set " + set +
+	return "update opamp_server.variable_group_overrides set " + set +
 		" where organization_id = '{orgA}' and variable_group_id = '{variableGroupA}' and variable_id = '{variableA}'"
 }
 
@@ -361,25 +361,25 @@ var linkRefusals = []refusal{
 var inUseRefusals = []refusal{
 	{name: "deleting a published version a group is assigned",
 		setup:     []string{updateGroupA1("assigned_publication_id = '{pubA}'")},
-		statement: "delete from telflo_opamp.publications where organization_id = '{orgA}' and id = '{pubA}'",
+		statement: "delete from opamp_server.publications where organization_id = '{orgA}' and id = '{pubA}'",
 		code:      "23503", constraint: "fk_collector_groups_assigned_publication"},
 	{name: "deleting a published version a collector is pinned to",
 		setup:     []string{updateCollectorA1("pinned_publication_id = '{pubA}'")},
-		statement: "delete from telflo_opamp.publications where organization_id = '{orgA}' and id = '{pubA}'",
+		statement: "delete from opamp_server.publications where organization_id = '{orgA}' and id = '{pubA}'",
 		code:      "23503", constraint: "fk_collector_instances_pinned_publication"},
 	{name: "deleting a group that holds a collector",
 		setup:     []string{updateCollectorA1("collector_group_id = '{groupA1Gateways}'")},
-		statement: "delete from telflo_opamp.collector_groups where organization_id = '{orgA}' and id = '{groupA1Gateways}'",
+		statement: "delete from opamp_server.collector_groups where organization_id = '{orgA}' and id = '{groupA1Gateways}'",
 		code:      "23503", constraint: "fk_collector_instances_collector_group"},
 	// A variable group a group or a pin uses can't be deleted (answered 409
 	// variable_group_in_use).
 	{name: "deleting a variable group a group is bound to",
 		setup:     []string{updateGroupA1("variable_group_id = '{variableGroupA}', variable_group_stamp = 1"), overrideA},
-		statement: "delete from telflo_opamp.variable_groups where organization_id = '{orgA}' and id = '{variableGroupA}'",
+		statement: "delete from opamp_server.variable_groups where organization_id = '{orgA}' and id = '{variableGroupA}'",
 		code:      "23503", constraint: "fk_collector_groups_variable_group"},
 	{name: "deleting a variable group a collector is pinned to",
 		setup:     []string{updateCollectorA1("pinned_variable_group_id = '{variableGroupA}', pinned_variable_group_stamp = 1"), overrideA},
-		statement: "delete from telflo_opamp.variable_groups where organization_id = '{orgA}' and id = '{variableGroupA}'",
+		statement: "delete from opamp_server.variable_groups where organization_id = '{orgA}' and id = '{variableGroupA}'",
 		code:      "23503", constraint: "fk_collector_instances_pinned_variable_group"},
 }
 
@@ -430,9 +430,9 @@ var uniqueRefusals = []refusal{
 // The bounds and the at-most-one checks.
 var checkRefusals = []refusal{
 	{name: "a negative collector cap",
-		statement: "update telflo_opamp.organizations set max_collectors = -1 where id = '{orgA}'", constraint: "ck_organizations_max_collectors_non_negative"},
+		statement: "update opamp_server.organizations set max_collectors = -1 where id = '{orgA}'", constraint: "ck_organizations_max_collectors_non_negative"},
 	{name: "a limit of no requests a minute",
-		statement: "update telflo_opamp.organizations set requests_per_minute = 0 where id = '{orgA}'", constraint: "ck_organizations_requests_per_minute_positive"},
+		statement: "update opamp_server.organizations set requests_per_minute = 0 where id = '{orgA}'", constraint: "ck_organizations_requests_per_minute_positive"},
 	{name: "a fleet label with a leading space",
 		statement: newFleet("{orgA}", "' edge-x'", "server"), constraint: "ck_fleets_label_trimmed_length"},
 	{name: "an empty fleet label",
@@ -450,7 +450,7 @@ var checkRefusals = []refusal{
 	{name: "a kubernetes fleet (the operator bridge's)",
 		statement: newFleet("{orgA}", "'edge-x'", "kubernetes"), constraint: "ck_fleets_type"},
 	{name: "a fleet neither active nor archived",
-		statement: "update telflo_opamp.fleets set status = 'deleted' where organization_id = '{orgA}' and id = '{fleetA1}'", constraint: "ck_fleets_status"},
+		statement: "update opamp_server.fleets set status = 'deleted' where organization_id = '{orgA}' and id = '{fleetA1}'", constraint: "ck_fleets_status"},
 	{name: "a fleet's creator with an id and no email",
 		statement:  strings.Replace(newFleet("{orgA}", "'edge-x'", "server"), "'active', null, null", "'active', gen_random_uuid(), null", 1),
 		constraint: "ck_fleets_created_by_both_or_neither"},
@@ -475,7 +475,7 @@ var checkRefusals = []refusal{
 	{name: "a token neither default nor rotate",
 		statement: newToken("gen_random_uuid()", "{orgA}", "{fleetA1}", "refresh", "null"), constraint: "ck_enrollment_tokens_kind"},
 	{name: "a default token that expires",
-		statement:  "update telflo_opamp.enrollment_tokens set expires_at = '{at}' where organization_id = '{orgA}' and id = '{tokenA1Default}'",
+		statement:  "update opamp_server.enrollment_tokens set expires_at = '{at}' where organization_id = '{orgA}' and id = '{tokenA1Default}'",
 		constraint: "ck_enrollment_tokens_default_never_expires"},
 	{name: "a token's maker with an email and no id",
 		statement:  strings.Replace(newToken("gen_random_uuid()", "{orgA}", "{fleetA1}", "rotate", "null"), "false, null, null", "false, null, 'ana@acme.io'", 1),
@@ -640,7 +640,7 @@ var checkRefusals = []refusal{
 	{name: "a served-variables marker of -1",
 		statement: updateCollectorA1("served_variables_stamp = -1"), constraint: "ck_collector_instances_served_variables_stamp_non_negative"},
 	{name: "a counter of -1",
-		statement:  "update telflo_opamp.organizations set variables_revision = -1 where id = '{orgA}'",
+		statement:  "update opamp_server.organizations set variables_revision = -1 where id = '{orgA}'",
 		constraint: "ck_organizations_variables_revision_non_negative"},
 }
 
@@ -713,8 +713,8 @@ func TestTheKeysAndChecksAllowWhatTheSpecAllows(t *testing.T) {
 		{"a collector pinned to its organization's published version", updateCollectorA1("pinned_publication_id = '{pubA}'")},
 		{"a collector served its organization's published version", updateCollectorA1("served_publication_id = '{pubA}', served_sha256 = repeat('a', 64)")},
 		{"a group assigned its organization's published version", updateGroupA1("assigned_publication_id = '{pubA}'")},
-		{"a collector cap of zero", "update telflo_opamp.organizations set max_collectors = 0 where id = '{orgA}'"},
-		{"one request a minute", "update telflo_opamp.organizations set requests_per_minute = 1 where id = '{orgA}'"},
+		{"a collector cap of zero", "update opamp_server.organizations set max_collectors = 0 where id = '{orgA}'"},
+		{"one request a minute", "update opamp_server.organizations set requests_per_minute = 1 where id = '{orgA}'"},
 		{"a fleet label with spaces and a tab inside", newFleet("{orgA}", `E'edge prod\tEU'`, "server")},
 		{"a group name with a space inside", newGroup("{orgA}", "{fleetA1}", "'edge gateways'", false)},
 		{"a fleet label of 80 characters", newFleet("{orgA}", "repeat('x', 80)", "server")},
@@ -762,7 +762,7 @@ func TestTheKeysAndChecksAllowWhatTheSpecAllows(t *testing.T) {
 		{"a collector pinned to its organization's variable group",
 			updateCollectorA1("pinned_variable_group_id = '{variableGroupA}', pinned_variable_group_stamp = 1")},
 		{"a served-variables marker of 0", updateCollectorA1("served_variables_stamp = 0")},
-		{"the counter at its largest", "update telflo_opamp.organizations set variables_revision = 9223372036854775807 where id = '{orgA}'"},
+		{"the counter at its largest", "update opamp_server.organizations set variables_revision = 9223372036854775807 where id = '{orgA}'"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			tx, err := d.Runtime.Begin(ctx)
@@ -788,7 +788,7 @@ func TestANewDefaultTokenMayFollowARevokedOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, fill(`update telflo_opamp.enrollment_tokens set revoked_at = '{at}'
+	if _, err := tx.Exec(ctx, fill(`update opamp_server.enrollment_tokens set revoked_at = '{at}'
 		 where organization_id = '{orgA}' and fleet_id = '{fleetA1}' and id = '{tokenA1Default}'`)); err != nil {
 		t.Fatal(err)
 	}
@@ -797,14 +797,14 @@ func TestANewDefaultTokenMayFollowARevokedOne(t *testing.T) {
 			t.Fatalf("a new default token after a revoke: %v", err)
 		}
 		if i == 0 {
-			if _, err := tx.Exec(ctx, fill(`update telflo_opamp.enrollment_tokens set revoked_at = '{at}'
+			if _, err := tx.Exec(ctx, fill(`update opamp_server.enrollment_tokens set revoked_at = '{at}'
 				 where organization_id = '{orgA}' and fleet_id = '{fleetA1}' and kind = 'default' and revoked_at is null`)); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
 	var defaults int
-	if err := tx.QueryRow(ctx, fill(`select count(*) from telflo_opamp.enrollment_tokens
+	if err := tx.QueryRow(ctx, fill(`select count(*) from opamp_server.enrollment_tokens
 		 where organization_id = '{orgA}' and fleet_id = '{fleetA1}' and kind = 'default'`)).Scan(&defaults); err != nil {
 		t.Fatal(err)
 	}
@@ -834,17 +834,17 @@ func TestMigration10NarrowsTheDefaultTokenIndexToValidTokens(t *testing.T) {
 	}
 	const (
 		everIndex = "uq_enrollment_tokens_fleet_id_where_kind_default"
-		everDef   = "CREATE UNIQUE INDEX " + everIndex + " ON telflo_opamp.enrollment_tokens USING btree " +
+		everDef   = "CREATE UNIQUE INDEX " + everIndex + " ON opamp_server.enrollment_tokens USING btree " +
 			"(organization_id, fleet_id) WHERE (kind = 'default'::text)"
 		validIndex = "uq_enrollment_tokens_fleet_id_where_default_not_revoked"
-		validDef   = "CREATE UNIQUE INDEX " + validIndex + " ON telflo_opamp.enrollment_tokens USING btree " +
+		validDef   = "CREATE UNIQUE INDEX " + validIndex + " ON opamp_server.enrollment_tokens USING btree " +
 			"(organization_id, fleet_id) WHERE ((kind = 'default'::text) AND (revoked_at IS NULL))"
 	)
 	defaultTokenIndexes := func() []string {
 		t.Helper()
 		rows, err := d.Admin.Query(ctx, `
 			select indexdef from pg_indexes
-			 where schemaname = 'telflo_opamp' and tablename = 'enrollment_tokens'
+			 where schemaname = 'opamp_server' and tablename = 'enrollment_tokens'
 			   and indexname like 'uq_enrollment_tokens_fleet_id_where_%'
 			 order by indexname`)
 		if err != nil {
@@ -860,7 +860,7 @@ func TestMigration10NarrowsTheDefaultTokenIndexToValidTokens(t *testing.T) {
 		t.Fatalf("at 9, the default token's indexes are %v, want 00008's", got)
 	}
 	before := tableRows(t, d.Admin, "enrollment_tokens")
-	revokeA1 := fill(`update telflo_opamp.enrollment_tokens set revoked_at = '{at}'
+	revokeA1 := fill(`update opamp_server.enrollment_tokens set revoked_at = '{at}'
 		 where organization_id = '{orgA}' and fleet_id = '{fleetA1}' and kind = 'default' and revoked_at is null`)
 	secondDefault := fill(newToken("gen_random_uuid()", "{orgA}", "{fleetA1}", "default", "null"))
 	refusedBy := func(err error, index string) bool {
@@ -879,7 +879,7 @@ func TestMigration10NarrowsTheDefaultTokenIndexToValidTokens(t *testing.T) {
 			t.Fatalf("round %d: up changed the tokens:\n before %v\n after  %v", round, before, got)
 		}
 		var comment string
-		if err := d.Admin.QueryRow(ctx, `select coalesce(obj_description(('telflo_opamp.' || $1)::regclass, 'pg_class'), '')`,
+		if err := d.Admin.QueryRow(ctx, `select coalesce(obj_description(('opamp_server.' || $1)::regclass, 'pg_class'), '')`,
 			validIndex).Scan(&comment); err != nil || !strings.Contains(comment, "at most one valid default token per fleet") {
 			t.Fatalf("round %d: the index's comment is %q, %v", round, comment, err)
 		}
@@ -908,11 +908,11 @@ func TestMigration10NarrowsTheDefaultTokenIndexToValidTokens(t *testing.T) {
 
 		// Put the fixture back by hand (the owner may delete a token), and
 		// down restores 00008's index.
-		if _, err := d.Owner.Exec(ctx, fill(`delete from telflo_opamp.enrollment_tokens
+		if _, err := d.Owner.Exec(ctx, fill(`delete from opamp_server.enrollment_tokens
 			 where organization_id = '{orgA}' and fleet_id = '{fleetA1}' and kind = 'default' and id <> '{tokenA1Default}'`)); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := d.Owner.Exec(ctx, fill(`update telflo_opamp.enrollment_tokens set revoked_at = null
+		if _, err := d.Owner.Exec(ctx, fill(`update opamp_server.enrollment_tokens set revoked_at = null
 			 where organization_id = '{orgA}' and id = '{tokenA1Default}'`)); err != nil {
 			t.Fatal(err)
 		}
@@ -937,14 +937,14 @@ func TestMigration10NarrowsTheDefaultTokenIndexToValidTokens(t *testing.T) {
 		if _, err := d.Runtime.Exec(ctx, secondDefault); !refusedBy(err, everIndex) {
 			t.Fatalf("round %d: at 9, a default token after a revoke: %v, want 23505 on %s", round, err, everIndex)
 		}
-		if _, err := d.Owner.Exec(ctx, fill(`update telflo_opamp.enrollment_tokens set revoked_at = null
+		if _, err := d.Owner.Exec(ctx, fill(`update opamp_server.enrollment_tokens set revoked_at = null
 			 where organization_id = '{orgA}' and id = '{tokenA1Default}'`)); err != nil {
 			t.Fatal(err)
 		}
 	}
 }
 
-// dropConstraint drops the constraint or index name in telflo_opamp, inside
+// dropConstraint drops the constraint or index name in opamp_server, inside
 // tx.
 func dropConstraint(t *testing.T, tx pgx.Tx, name string) {
 	t.Helper()
@@ -952,7 +952,7 @@ func dropConstraint(t *testing.T, tx pgx.Tx, name string) {
 	var table string
 	err := tx.QueryRow(ctx, `
 		select c.conrelid::regclass::text from pg_constraint c
-		 where c.conname = $1 and c.connamespace = 'telflo_opamp'::regnamespace`, name).Scan(&table)
+		 where c.conname = $1 and c.connamespace = 'opamp_server'::regnamespace`, name).Scan(&table)
 	switch {
 	case err == nil:
 		_, err = tx.Exec(ctx, "alter table "+table+" drop constraint "+pgx.Identifier{name}.Sanitize())
@@ -1010,10 +1010,10 @@ var pointerDeletes = []struct {
 }{
 	{"a published version it was served", "fk_collector_instances_served_publication", "served_publication_id",
 		"served_publication_id = '{pubA}', served_sha256 = repeat('a', 64), served_at = '{at}'", database.ServerRole,
-		"delete from telflo_opamp.publications where organization_id = '{orgA}' and id = '{pubA}'"},
+		"delete from opamp_server.publications where organization_id = '{orgA}' and id = '{pubA}'"},
 	{"the token it used", "fk_collector_instances_enrollment_token", "enrollment_token_id",
 		"served_sha256 = repeat('a', 64)", database.OwnerRole,
-		"delete from telflo_opamp.enrollment_tokens where organization_id = '{orgA}' and id = '{tokenA1Rotate}'"},
+		"delete from opamp_server.enrollment_tokens where organization_id = '{orgA}' and id = '{tokenA1Rotate}'"},
 }
 
 func TestDeletingWhatACollectorWasServedClearsOnlyThatPointer(t *testing.T) {
@@ -1038,7 +1038,7 @@ func TestDeletingWhatACollectorWasServedClearsOnlyThatPointer(t *testing.T) {
 			var cleared bool
 			if err := tx.QueryRow(ctx, `
 				select organization_id::text, fleet_id::text, served_sha256, `+c.column+` is null
-				  from telflo_opamp.collector_instances where id = $1`, collectorA1,
+				  from opamp_server.collector_instances where id = $1`, collectorA1,
 			).Scan(&organization, &fleet, &sha256, &cleared); err != nil {
 				t.Fatal(err)
 			}
@@ -1068,7 +1068,7 @@ func TestThePointerCheckSeesASetNullOfEveryColumn(t *testing.T) {
 			if everyColumn == wantForeignKeys[c.constraint] {
 				t.Fatalf("%s isn't a set null of %s alone: %s", c.constraint, c.column, everyColumn)
 			}
-			if _, err := tx.Exec(ctx, "alter table telflo_opamp.collector_instances drop constraint "+c.constraint+
+			if _, err := tx.Exec(ctx, "alter table opamp_server.collector_instances drop constraint "+c.constraint+
 				", add constraint "+c.constraint+" "+everyColumn); err != nil {
 				t.Fatal(err)
 			}
@@ -1096,11 +1096,11 @@ const linkEverything = linkPublications + linkVariables + linkAPIKeys
 // organization's delete takes its link and leaves the key, the server's own
 // row.
 const linkAPIKeys = `
-insert into telflo_opamp.api_keys (id, name, description, secret_sha256, all_organizations, expires_at,
+insert into opamp_server.api_keys (id, name, description, secret_sha256, all_organizations, expires_at,
   revoked_at, last_used_at, created_at) values
   ('{apiKey}', 'deploy pipeline', null, sha256('secret'), false, '{at}'::timestamptz + interval '1 day',
    null, null, '{at}');
-insert into telflo_opamp.api_key_organizations (organization_id, api_key_id) values
+insert into opamp_server.api_key_organizations (organization_id, api_key_id) values
   ('{orgA}', '{apiKey}'), ('{orgB}', '{apiKey}');
 `
 
@@ -1108,27 +1108,27 @@ insert into telflo_opamp.api_key_organizations (organization_id, api_key_id) val
 // assigned a published version, a collector pinned to and served it, token
 // events and error rows.
 const linkPublications = `
-update telflo_opamp.collector_groups set assigned_publication_id = '{pubA}'
+update opamp_server.collector_groups set assigned_publication_id = '{pubA}'
  where organization_id = '{orgA}' and id = '{groupA1}';
-update telflo_opamp.collector_instances
+update opamp_server.collector_instances
    set pinned_publication_id = '{pubA}', served_publication_id = '{pubA}', served_sha256 = repeat('a', 64)
  where organization_id = '{orgA}' and id = '{collectorA1}';
-insert into telflo_opamp.collector_instances (id, organization_id, fleet_id, collector_group_id,
+insert into opamp_server.collector_instances (id, organization_id, fleet_id, collector_group_id,
   instance_uid, name, served_sha256, effective_sha256,
   effective_status, enrollment_token_id, last_seen_at, created_at, updated_at) values
   (gen_random_uuid(), '{orgA}', '{fleetA1}', '{groupA1Gateways}', gen_random_uuid(), 'edge-02',
    repeat('d', 64), repeat('d', 64), 'applied', '{tokenA1Default}', '{at}', '{at}', '{at}');
-insert into telflo_opamp.enrollment_token_events (id, organization_id, fleet_id, enrollment_token_id,
+insert into opamp_server.enrollment_token_events (id, organization_id, fleet_id, enrollment_token_id,
   event, actor_id, actor_email, occurred_at) values
   (gen_random_uuid(), '{orgA}', '{fleetA1}', '{tokenA1Default}', 'issued', null, null, '{at}'),
   (gen_random_uuid(), '{orgB}', '{fleetB}', '{tokenBDefault}', 'issued', null, null, '{at}');
-insert into telflo_opamp.collector_errors (id, organization_id, collector_instance_id, reported_at,
+insert into opamp_server.collector_errors (id, organization_id, collector_instance_id, reported_at,
   config_sha256, message) values
   (gen_random_uuid(), '{orgA}', '{collectorA1}', '{at}', repeat('a', 64), 'failed'),
   (gen_random_uuid(), '{orgB}', '{collectorB}', '{at}', repeat('b', 64), 'failed');
-update telflo_opamp.collector_groups set assigned_publication_id = '{pubB}'
+update opamp_server.collector_groups set assigned_publication_id = '{pubB}'
  where organization_id = '{orgB}' and id = '{groupB}';
-update telflo_opamp.collector_instances set pinned_publication_id = '{pubB}', served_publication_id = '{pubB}'
+update opamp_server.collector_instances set pinned_publication_id = '{pubB}', served_publication_id = '{pubB}'
  where organization_id = '{orgB}' and id = '{collectorB}';
 `
 
@@ -1138,31 +1138,31 @@ update telflo_opamp.collector_instances set pinned_publication_id = '{pubB}', se
 // a variable group and a collector pinned to one, with their stamps, the
 // marker and the counter.
 const linkVariables = `
-insert into telflo_opamp.variables (id, organization_id, name, description, value, changed_by_id,
+insert into opamp_server.variables (id, organization_id, name, description, value, changed_by_id,
   changed_by_email, changed_at, stamp) values
   ('{variableA2}', '{orgA}', 'TIER', 'the service tier', 'gold', gen_random_uuid(), 'ana@acme.io', '{at}', 3);
-insert into telflo_opamp.variable_group_overrides (organization_id, variable_group_id, variable_id, value,
+insert into opamp_server.variable_group_overrides (organization_id, variable_group_id, variable_id, value,
   changed_by_id, changed_by_email, changed_at, stamp) values
   ('{orgA}', '{variableGroupA}', '{variableA}', 'eu-central-1', null, null, '{at}', 4),
   ('{orgA}', '{variableGroupA}', '{variableA2}', null, null, null, '{at}', 5),
   ('{orgB}', '{variableGroupB}', '{variableB}', 'us-west-2', null, null, '{at}', 2);
-insert into telflo_opamp.publication_variable_names (organization_id, publication_id, name) values
+insert into opamp_server.publication_variable_names (organization_id, publication_id, name) values
   ('{orgA}', '{pubA}', 'REGION'), ('{orgA}', '{pubA}', 'TIER'), ('{orgB}', '{pubB}', 'REGION');
-update telflo_opamp.collector_groups set variable_group_id = '{variableGroupA}', variable_group_stamp = 6
+update opamp_server.collector_groups set variable_group_id = '{variableGroupA}', variable_group_stamp = 6
  where organization_id = '{orgA}' and id = '{groupA1}';
-update telflo_opamp.collector_instances
+update opamp_server.collector_instances
    set pinned_variable_group_id = '{variableGroupA}', pinned_variable_group_stamp = 7, served_variables_stamp = 7
  where organization_id = '{orgA}' and id = '{collectorA1}';
-update telflo_opamp.collector_groups set variable_group_id = '{variableGroupB}', variable_group_stamp = 3
+update opamp_server.collector_groups set variable_group_id = '{variableGroupB}', variable_group_stamp = 3
  where organization_id = '{orgB}' and id = '{groupB}';
-update telflo_opamp.collector_instances
+update opamp_server.collector_instances
    set pinned_variable_group_id = '{variableGroupB}', pinned_variable_group_stamp = 3, served_variables_stamp = 3
  where organization_id = '{orgB}' and id = '{collectorB}';
-update telflo_opamp.organizations set variables_revision = 7 where id = '{orgA}';
-update telflo_opamp.organizations set variables_revision = 3 where id = '{orgB}';
+update opamp_server.organizations set variables_revision = 7 where id = '{orgA}';
+update opamp_server.organizations set variables_revision = 3 where id = '{orgB}';
 `
 
-// organizationRowsByTable answers, for every table in telflo_opamp but
+// organizationRowsByTable answers, for every table in opamp_server but
 // goose's and the server's own, the rows of organization as text, in order: its own row in
 // organizations, and every row naming it elsewhere. A table without
 // organization_id fails the test.
@@ -1174,7 +1174,7 @@ func organizationRowsByTable(t *testing.T, q *pgxpool.Pool, organization string)
 		       exists (select 1 from pg_attribute a
 		                where a.attrelid = c.oid and a.attname = 'organization_id' and not a.attisdropped)
 		  from pg_class c
-		 where c.relnamespace = 'telflo_opamp'::regnamespace and c.relkind = 'r'
+		 where c.relnamespace = 'opamp_server'::regnamespace and c.relkind = 'r'
 		   and c.relname not in ('goose_db_version', '`+database.ServerTable+`')
 		 order by 1`)
 	if err != nil {
@@ -1198,9 +1198,9 @@ func organizationRowsByTable(t *testing.T, q *pgxpool.Pool, organization string)
 		if tb.name == "organizations" {
 			column = "id"
 		} else if !tb.hasOrganizationID {
-			t.Fatalf("telflo_opamp.%s has no organization_id", tb.name)
+			t.Fatalf("opamp_server.%s has no organization_id", tb.name)
 		}
-		rows, err := q.Query(ctx, "select r::text from telflo_opamp."+pgx.Identifier{tb.name}.Sanitize()+
+		rows, err := q.Query(ctx, "select r::text from opamp_server."+pgx.Identifier{tb.name}.Sanitize()+
 			" r where "+column+" = $1 order by 1", organization)
 		if err != nil {
 			t.Fatal(err)
@@ -1244,7 +1244,7 @@ func forceAdversarialCascadeOrder(t *testing.T, q querier, first string) {
 	rows, err := q.Query(ctx, `
 		select c.conname, c.conrelid::regclass::text, pg_get_constraintdef(c.oid)
 		  from pg_constraint c
-		 where c.contype = 'f' and c.confrelid = 'telflo_opamp.organizations'::regclass
+		 where c.contype = 'f' and c.confrelid = 'opamp_server.organizations'::regclass
 		 order by c.conname <> $1, c.conname`, first)
 	if err != nil {
 		t.Fatal(err)
@@ -1272,7 +1272,7 @@ func forceAdversarialCascadeOrder(t *testing.T, q querier, first string) {
 		rows, err := q.Query(ctx, `
 			select c.conname
 			  from pg_trigger t join pg_constraint c on c.oid = t.tgconstraint
-			 where t.tgrelid = 'telflo_opamp.organizations'::regclass
+			 where t.tgrelid = 'opamp_server.organizations'::regclass
 			   and t.tgfoid = '"RI_FKey_cascade_del"'::regproc
 			 order by t.tgname collate "C"`)
 		if err != nil {
@@ -1339,7 +1339,7 @@ func TestDeletingAnOrganizationRemovesEveryRowItOwns(t *testing.T) {
 				}
 			}
 			var keys int
-			if err := d.Admin.QueryRow(ctx, "select count(*) from telflo_opamp.api_keys").Scan(&keys); err != nil || keys != 1 {
+			if err := d.Admin.QueryRow(ctx, "select count(*) from opamp_server.api_keys").Scan(&keys); err != nil || keys != 1 {
 				t.Errorf("%d keys after A's delete, %v; want the key kept", keys, err)
 			}
 		})
@@ -1379,7 +1379,7 @@ func TestTheOrganizationsDeleteNeedsEveryTablesOwnCascade(t *testing.T) {
 			if _, err := tx.Exec(ctx, "set local role "+database.ServerRole); err != nil {
 				t.Fatal(err)
 			}
-			_, err = tx.Exec(ctx, "delete from telflo_opamp.organizations where id = $1", orgA)
+			_, err = tx.Exec(ctx, "delete from opamp_server.organizations where id = $1", orgA)
 			var pgErr *pgconn.PgError
 			if !errors.As(err, &pgErr) || pgErr.Code != "23503" || !slices.Contains(c.keys, pgErr.ConstraintName) {
 				t.Fatalf("without the direct cascades, the delete = %v; want 23503 naming one of %v", err, c.keys)
@@ -1431,11 +1431,11 @@ func TestDeletingAVariableOrAGroupDeletesItsOverridesAndAPublicationItsNames(t *
 	overrides := func() []string {
 		t.Helper()
 		return rowsOf(`select variable_group_id::text || ' ' || variable_id::text || ' ' || coalesce(value, '(reset)')
-			from telflo_opamp.variable_group_overrides order by 1`)
+			from opamp_server.variable_group_overrides order by 1`)
 	}
 	names := func() []string {
 		t.Helper()
-		return rowsOf(`select publication_id::text || ' ' || name from telflo_opamp.publication_variable_names order by 1`)
+		return rowsOf(`select publication_id::text || ' ' || name from opamp_server.publication_variable_names order by 1`)
 	}
 	sorted := func(rows ...string) []string { return slices.Sorted(slices.Values(rows)) }
 	exec := func(statement string) {
@@ -1446,7 +1446,7 @@ func TestDeletingAVariableOrAGroupDeletesItsOverridesAndAPublicationItsNames(t *
 		}
 	}
 
-	exec("delete from telflo_opamp.variables where organization_id = '{orgA}' and id = '{variableA}'")
+	exec("delete from opamp_server.variables where organization_id = '{orgA}' and id = '{variableA}'")
 	if got, want := overrides(), sorted(
 		variableGroupA+" "+variableA2+" (reset)",
 		variableGroupA2+" "+variableA2+" silver",
@@ -1455,7 +1455,7 @@ func TestDeletingAVariableOrAGroupDeletesItsOverridesAndAPublicationItsNames(t *
 		t.Fatalf("after the variable's delete, the overrides are %v, want %v", got, want)
 	}
 
-	exec("delete from telflo_opamp.variable_groups where organization_id = '{orgA}' and id = '{variableGroupA}'")
+	exec("delete from opamp_server.variable_groups where organization_id = '{orgA}' and id = '{variableGroupA}'")
 	if got, want := overrides(), sorted(
 		variableGroupA2+" "+variableA2+" silver",
 		variableGroupB+" "+variableB+" us-west-2",
@@ -1463,7 +1463,7 @@ func TestDeletingAVariableOrAGroupDeletesItsOverridesAndAPublicationItsNames(t *
 		t.Fatalf("after the variable group's delete, the overrides are %v, want %v", got, want)
 	}
 
-	exec("delete from telflo_opamp.publications where organization_id = '{orgA}' and id = '{pubA}'")
+	exec("delete from opamp_server.publications where organization_id = '{orgA}' and id = '{pubA}'")
 	if got, want := names(), []string{pubB + " REGION"}; !slices.Equal(got, want) {
 		t.Fatalf("after the published version's delete, the names are %v, want %v", got, want)
 	}
@@ -1489,24 +1489,24 @@ func TestEveryTableColumnIndexAndConstraintHasAComment(t *testing.T) {
 	rows, err := d.Admin.Query(context.Background(), `
 		select 'table ' || c.relname
 		  from pg_class c
-		 where c.relnamespace = 'telflo_opamp'::regnamespace and c.relkind = 'r'
+		 where c.relnamespace = 'opamp_server'::regnamespace and c.relkind = 'r'
 		   and c.relname <> 'goose_db_version' and obj_description(c.oid, 'pg_class') is null
 		union all
 		select 'column ' || c.relname || '.' || a.attname
 		  from pg_class c join pg_attribute a on a.attrelid = c.oid
-		 where c.relnamespace = 'telflo_opamp'::regnamespace and c.relkind = 'r'
+		 where c.relnamespace = 'opamp_server'::regnamespace and c.relkind = 'r'
 		   and c.relname <> 'goose_db_version' and a.attnum > 0 and not a.attisdropped
 		   and col_description(c.oid, a.attnum) is null
 		union all
 		select 'index ' || i.relname
 		  from pg_index x join pg_class i on i.oid = x.indexrelid join pg_class c on c.oid = x.indrelid
-		 where i.relnamespace = 'telflo_opamp'::regnamespace and c.relname <> 'goose_db_version'
+		 where i.relnamespace = 'opamp_server'::regnamespace and c.relname <> 'goose_db_version'
 		   and not exists (select 1 from pg_constraint k where k.conindid = i.oid and k.conrelid = c.oid)
 		   and obj_description(i.oid, 'pg_class') is null
 		union all
 		select 'constraint ' || c.relname || '.' || k.conname
 		  from pg_constraint k join pg_class c on c.oid = k.conrelid
-		 where k.connamespace = 'telflo_opamp'::regnamespace and c.relname <> 'goose_db_version'
+		 where k.connamespace = 'opamp_server'::regnamespace and c.relname <> 'goose_db_version'
 		   and k.contype <> 'n' and obj_description(k.oid, 'pg_constraint') is null
 		order by 1`)
 	if err != nil {
@@ -1534,7 +1534,7 @@ func TestEveryIndexLeadsWithTheOrganization(t *testing.T) {
 		  join pg_class i on i.oid = x.indexrelid
 		  join pg_class c on c.oid = x.indrelid
 		  join pg_attribute a on a.attrelid = c.oid and a.attnum = x.indkey[0]
-		 where c.relnamespace = 'telflo_opamp'::regnamespace
+		 where c.relnamespace = 'opamp_server'::regnamespace
 		   and c.relname not in ('goose_db_version', 'organizations', '`+database.ServerTable+`')
 		   and not x.indisprimary and a.attname <> 'organization_id'
 		order by 1`)

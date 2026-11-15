@@ -201,7 +201,7 @@ initdb_lines() {
   grep -qxF "PGOPTIONS='-c log_min_error_statement=panic'" "$CHART_DIR/files/initdb.sh" &&
     grep -qxF "export PGOPTIONS" "$CHART_DIR/files/initdb.sh" &&
     grep -qxF 'exec psql -X -v ON_ERROR_STOP=1 --no-password --username "$POSTGRES_USER" --dbname postgres \' "$CHART_DIR/files/initdb.sh" &&
-    grep -qxF '  -v database="${OPAMP_DATABASE_NAME:-telflo_opamp}" -f /opamp-bootstrap/bootstrap.sql' "$CHART_DIR/files/initdb.sh" &&
+    grep -qxF '  -v database="${OPAMP_DATABASE_NAME:-telflo_opamp_server}" -f /opamp-bootstrap/bootstrap.sql' "$CHART_DIR/files/initdb.sh" &&
     [ "$(grep -n 'PGOPTIONS=' "$CHART_DIR/files/initdb.sh" | cut -d: -f1)" -lt "$(grep -n '^exec psql' "$CHART_DIR/files/initdb.sh" | cut -d: -f1)" ]
 }
 run_case "initdb.sh sets PGOPTIONS log_min_error_statement=panic, then execs psql on /opamp-bootstrap/bootstrap.sql" initdb_lines
@@ -285,7 +285,7 @@ run_case "no variable's value holds a Secret's name" no_value_holds_secret_names
 urls_compose_only() { # every URL value takes its password from a $(VAR), never a literal
   local l
   for l in $ALL_LISTINGS; do
-    awk '$1 ~ /DATABASE_URL\]\.value$/ { print $2 }' "$l" | grep -vqE '^"postgresql://telflo_opamp(_owner)?:\$\(OPAMP_(OWNER|RUNTIME)_PASSWORD\)@' && return 1
+    awk '$1 ~ /DATABASE_URL\]\.value$/ { print $2 }' "$l" | grep -vqE '^"postgresql://telflo_opamp_server(_owner)?:\$\(OPAMP_(OWNER|RUNTIME)_PASSWORD\)@' && return 1
   done
   return 0
 }
@@ -489,12 +489,12 @@ run_case "the management API's serve likewise" password_before_url "$L" "$SRVM" 
 run_case "the order holds with an external Postgres too (migrate)" password_before_url "$tmp/external" "$MIG" OPAMP_OWNER_PASSWORD OPAMP_MIGRATION_DATABASE_URL
 run_case "the order holds with an external Postgres too (serve)" password_before_url "$tmp/external" "$SRV" OPAMP_RUNTIME_PASSWORD OPAMP_DATABASE_URL
 bundled_urls() {
-  eq "$L" "$MIG.env[OPAMP_MIGRATION_DATABASE_URL].value" "\"postgresql://telflo_opamp_owner:\$(OPAMP_OWNER_PASSWORD)@$FULL-postgres:5432/telflo_opamp?sslmode=disable\"" &&
-    eq "$L" "$SRV.env[OPAMP_DATABASE_URL].value" "\"postgresql://telflo_opamp:\$(OPAMP_RUNTIME_PASSWORD)@$FULL-postgres:5432/telflo_opamp?sslmode=disable\"" &&
+  eq "$L" "$MIG.env[OPAMP_MIGRATION_DATABASE_URL].value" "\"postgresql://telflo_opamp_server_owner:\$(OPAMP_OWNER_PASSWORD)@$FULL-postgres:5432/telflo_opamp_server?sslmode=disable\"" &&
+    eq "$L" "$SRV.env[OPAMP_DATABASE_URL].value" "\"postgresql://telflo_opamp_server:\$(OPAMP_RUNTIME_PASSWORD)@$FULL-postgres:5432/telflo_opamp_server?sslmode=disable\"" &&
     eq "$L" "$MIGM.env[OPAMP_MIGRATION_DATABASE_URL].value" "$(value "$L" "$MIG.env[OPAMP_MIGRATION_DATABASE_URL].value")" &&
     eq "$L" "$SRVM.env[OPAMP_DATABASE_URL].value" "$(value "$L" "$SRV.env[OPAMP_DATABASE_URL].value")"
 }
-run_case "the bundled Postgres's URLs: owner for migrate, telflo_opamp for serve" bundled_urls
+run_case "the bundled Postgres's URLs: owner for migrate, telflo_opamp_server for serve" bundled_urls
 srv_extra_env_last() {
   local names d
   for d in Deployment/opamp-agent Deployment/opamp-management; do
@@ -613,7 +613,7 @@ initdb_run() { # <OPAMP_DATABASE_NAME or "-unset-"> <expected database>
   ) || return 1
   [ "$(cat "$f.log")" = "$(printf '%s\n' -X -v ON_ERROR_STOP=1 --no-password --username postgres --dbname postgres -v "database=$2" -f /opamp-bootstrap/bootstrap.sql 'PGOPTIONS=-c log_min_error_statement=panic')" ]
 }
-run_case "initdb.sh runs psql on /opamp-bootstrap/bootstrap.sql as POSTGRES_USER, with PGOPTIONS set" initdb_run -unset- telflo_opamp
+run_case "initdb.sh runs psql on /opamp-bootstrap/bootstrap.sql as POSTGRES_USER, with PGOPTIONS set" initdb_run -unset- telflo_opamp_server
 run_case "initdb.sh passes OPAMP_DATABASE_NAME as -v database" initdb_run opamp_db opamp_db
 pg_mounts() {
   eq "$L" "$PG.volumeMounts[bootstrap-initdb].mountPath" '"/docker-entrypoint-initdb.d"' &&
@@ -648,7 +648,7 @@ run_case "pg_isready probes" pg_probes
 pg_headless() { eq "$L" "Service/$FULL-postgres.spec.clusterIP" '"None"' && eq "$L" "$SS.spec.serviceName" "\"$FULL-postgres\""; }
 run_case "a headless Service names the StatefulSet's pod" pg_headless
 pg_dbname() { eq "$tmp/full" "StatefulSet/opamp-postgres.spec.template.spec.containers[postgres].env[OPAMP_DATABASE_NAME].value" '"opamp_db"' &&
-  eq "$tmp/full" "Deployment/opamp-agent.spec.template.spec.containers[serve].env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp:$(OPAMP_RUNTIME_PASSWORD)@opamp-postgres:5432/opamp_db?sslmode=disable"'; }
+  eq "$tmp/full" "Deployment/opamp-agent.spec.template.spec.containers[serve].env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp_server:$(OPAMP_RUNTIME_PASSWORD)@opamp-postgres:5432/opamp_db?sslmode=disable"'; }
 run_case "postgres.database names the bootstrap's database and the URLs'" pg_dbname
 
 # ---------------------------------------------------------------------------
@@ -662,9 +662,9 @@ run_case "no StatefulSet or postgres Service; the bootstrap ConfigMap still rend
 ext_no_wait() { no_path "$X" "$WAIT" && no_path "$X" "$WAITM"; }
 run_case "no wait-for-postgres init container (both)" ext_no_wait
 ext_urls() {
-  eq "$X" "$MIG.env[OPAMP_MIGRATION_DATABASE_URL].value" '"postgresql://telflo_opamp_owner:$(OPAMP_OWNER_PASSWORD)@db.example.com:5433/opamp_db?sslmode=verify-full"' &&
-    eq "$X" "$SRV.env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp:$(OPAMP_RUNTIME_PASSWORD)@db.example.com:5433/opamp_db?sslmode=verify-full"' &&
-    eq "$X" "$SRVM.env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp:$(OPAMP_RUNTIME_PASSWORD)@db.example.com:5433/opamp_db?sslmode=verify-full"'
+  eq "$X" "$MIG.env[OPAMP_MIGRATION_DATABASE_URL].value" '"postgresql://telflo_opamp_server_owner:$(OPAMP_OWNER_PASSWORD)@db.example.com:5433/opamp_db?sslmode=verify-full"' &&
+    eq "$X" "$SRV.env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp_server:$(OPAMP_RUNTIME_PASSWORD)@db.example.com:5433/opamp_db?sslmode=verify-full"' &&
+    eq "$X" "$SRVM.env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp_server:$(OPAMP_RUNTIME_PASSWORD)@db.example.com:5433/opamp_db?sslmode=verify-full"'
 }
 run_case "the URLs take externalDatabase's host, port, database and sslmode" ext_urls
 ext_keys() {
@@ -928,7 +928,7 @@ names_override() {
   next_file
   render_flat "$f" "${B[@]}" --set-string fullnameOverride=edge || return 1
   [ "$(kinds "$f" | tr '\n' ' ')" = "ConfigMap/edge-bootstrap Deployment/edge-agent Deployment/edge-management Service/edge-agent Service/edge-management Service/edge-postgres ServiceAccount/edge StatefulSet/edge-postgres " ] &&
-    eq "$f" "Deployment/edge-agent.spec.template.spec.containers[serve].env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp:$(OPAMP_RUNTIME_PASSWORD)@edge-postgres:5432/telflo_opamp?sslmode=disable"'
+    eq "$f" "Deployment/edge-agent.spec.template.spec.containers[serve].env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp_server:$(OPAMP_RUNTIME_PASSWORD)@edge-postgres:5432/telflo_opamp_server?sslmode=disable"'
 }
 run_case "fullnameOverride names every resource and the Postgres host" names_override
 name_override() {
@@ -1244,8 +1244,8 @@ dollar_values() {
     eq "$f" "$S.env[EXAMPLE_PLAIN].value" "\"$DOLLAR_ESCAPED\"" &&
     eq "$f" "$S.env[EXAMPLE_EMPTY].value" '""' &&
     eq "$f" "$S.env[EXAMPLE_FROM_SECRET].valueFrom.secretKeyRef.name" '"example-extra"' && no_path "$f" "$S.env[EXAMPLE_FROM_SECRET].value" &&
-    eq "$f" "$S.env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp:$(OPAMP_RUNTIME_PASSWORD)@opamp-postgres:5432/opamp_db?sslmode=disable"' &&
-    eq "$f" "$FS.initContainers[migrate].env[OPAMP_MIGRATION_DATABASE_URL].value" '"postgresql://telflo_opamp_owner:$(OPAMP_OWNER_PASSWORD)@opamp-postgres:5432/opamp_db?sslmode=disable"' &&
+    eq "$f" "$S.env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp_server:$(OPAMP_RUNTIME_PASSWORD)@opamp-postgres:5432/opamp_db?sslmode=disable"' &&
+    eq "$f" "$FS.initContainers[migrate].env[OPAMP_MIGRATION_DATABASE_URL].value" '"postgresql://telflo_opamp_server_owner:$(OPAMP_OWNER_PASSWORD)@opamp-postgres:5432/opamp_db?sslmode=disable"' &&
     eq "$f" "$FSM.containers[serve].env[OTEL_SERVICE_NAME].value" "\"$DOLLAR_ESCAPED\"" &&
     eq "$f" "$FSM.containers[serve].env[EXAMPLE_PLAIN].value" "\"$DOLLAR_ESCAPED\"" &&
     only_own_refs "$f"

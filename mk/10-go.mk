@@ -82,7 +82,7 @@ go-licenses-test:
 # nothing. Its database is a throwaway (`_test`), dropped when the script
 # exits; the roles stay for the Go tests.
 go-bootstrap: require-postgres
-	./scripts/check-bootstrap.sh telflo_opamp_bootstrap_test
+	./scripts/check-bootstrap.sh telflo_opamp_server_bootstrap_test
 
 # The tests, with -json so skips can be seen; a failing test's output is
 # printed from the report. A test that skips itself (say, one that finds no

@@ -22,10 +22,10 @@ import (
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests").
-const testDatabase = "telflo_opamp_publications_test"
+const testDatabase = "telflo_opamp_server_publications_test"
 
 // eachStore runs test against the Postgres store on a fresh, migrated
-// database, as telflo_opamp (the server's role, with its real grants), in a
+// database, as telflo_opamp_server (the server's role, with its real grants), in a
 // subtest named "postgres". Organizations A and B are registered, and no
 // other.
 func eachStore(t *testing.T, test func(t *testing.T, store publications.Store)) {
@@ -33,7 +33,7 @@ func eachStore(t *testing.T, test func(t *testing.T, store publications.Store)) 
 		d := databasetest.New(t, testDatabase)
 		for _, id := range []uuid.UUID{orgA, orgB} {
 			if _, err := d.Owner.Exec(context.Background(), `
-				insert into telflo_opamp.organizations (id, name, created_at, updated_at, generation)
+				insert into opamp_server.organizations (id, name, created_at, updated_at, generation)
 				values ($1, 'an organization', $2, $2, gen_random_uuid())`, id, received); err != nil {
 				t.Fatal(err)
 			}
@@ -608,7 +608,7 @@ func eachNamesStore(t *testing.T, test func(t *testing.T, s namesStore)) {
 		d := databasetest.New(t, testDatabase)
 		for _, id := range []uuid.UUID{orgA, orgB} {
 			if _, err := d.Owner.Exec(context.Background(), `
-				insert into telflo_opamp.organizations (id, name, created_at, updated_at, generation)
+				insert into opamp_server.organizations (id, name, created_at, updated_at, generation)
 				values ($1, 'an organization', $2, $2, gen_random_uuid())`, id, received); err != nil {
 				t.Fatal(err)
 			}
@@ -619,7 +619,7 @@ func eachNamesStore(t *testing.T, test func(t *testing.T, s namesStore)) {
 			names: func(t *testing.T, organizationID, publicationID uuid.UUID) []string {
 				t.Helper()
 				rows, err := d.Owner.Query(ctx, `
-					select name from telflo_opamp.publication_variable_names
+					select name from opamp_server.publication_variable_names
 					 where organization_id = $1 and publication_id = $2
 					 order by name collate "C"`, organizationID, publicationID)
 				if err != nil {
@@ -633,7 +633,7 @@ func eachNamesStore(t *testing.T, test func(t *testing.T, s namesStore)) {
 			},
 			allNames: func(t *testing.T) (n int) {
 				t.Helper()
-				if err := d.Owner.QueryRow(ctx, `select count(*) from telflo_opamp.publication_variable_names`).Scan(&n); err != nil {
+				if err := d.Owner.QueryRow(ctx, `select count(*) from opamp_server.publication_variable_names`).Scan(&n); err != nil {
 					t.Fatal(err)
 				}
 				return n
@@ -737,7 +737,7 @@ func TestAPutThatStoresNothingStoresNoNames(t *testing.T) {
 				t.Fatal(err)
 			}
 			if _, err := tx.Exec(ctx, `
-				insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+				insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
 				  version_id, version_number, version_label, yaml, sha256, published_by_id, published_by_email,
 				  published_at, received_at, collector_distribution, collector_version)
 				values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
@@ -825,14 +825,14 @@ func TestAPutForAnUnregisteredOrganizationIsOrganizationNotFound(t *testing.T) {
 		var ref string
 		if err := s.d.Admin.QueryRow(ctx, `
 			select confrelid::regclass::text from pg_constraint
-			 where conname = 'fk_publication_variable_names_organization'`).Scan(&ref); err != nil || ref != "telflo_opamp.organizations" {
+			 where conname = 'fk_publication_variable_names_organization'`).Scan(&ref); err != nil || ref != "opamp_server.organizations" {
 			t.Fatalf("the names' key to the organization: %q, %v", ref, err)
 		}
-		if _, err := s.d.Admin.Exec(ctx, `alter table telflo_opamp.publications disable trigger all`); err != nil {
+		if _, err := s.d.Admin.Exec(ctx, `alter table opamp_server.publications disable trigger all`); err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() {
-			if _, err := s.d.Admin.Exec(context.Background(), `alter table telflo_opamp.publications enable trigger all`); err != nil {
+			if _, err := s.d.Admin.Exec(context.Background(), `alter table opamp_server.publications enable trigger all`); err != nil {
 				t.Errorf("turning the publications' triggers back on: %v", err)
 			}
 		})

@@ -645,8 +645,8 @@ the line says what's wrong and what to set. The common ones:
 - `the schema is at 12, this build needs 13`: run `opamp-server migrate up`.
 - `the schema is at 14, which is newer than this build`: run the release
   that migrated it, or a later one.
-- `the database role "telflo_opamp_owner" is …`: `OPAMP_DATABASE_URL`
-  names the owner. `serve` connects as `telflo_opamp`, and only `migrate`
+- `the database role "telflo_opamp_server_owner" is …`: `OPAMP_DATABASE_URL`
+  names the owner. `serve` connects as `telflo_opamp_server`, and only `migrate`
   connects as the owner ([docs/database.md](docs/database.md)).
 - `can't listen on the management port … address already in use`: another
   `serve`, or a `kubectl port-forward`, already has the port.
@@ -684,10 +684,10 @@ usually an invalid configuration. `GET …/collectors/{collectorId}/errors`
 lists what it reported ([docs/management-api.md](docs/management-api.md),
 [docs/STATE_MODEL.md](docs/STATE_MODEL.md)).
 
-**A database holding the old imports table** (`telflo_opamp.imports`)
+**A database holding the old imports table** (`opamp_server.imports`)
 can't be upgraded. `migrate up` and `serve` refuse it and point here.
 It's a development database from before the first release. Drop the
-`telflo_opamp` database, then run the bootstrap and `migrate up` again
+`telflo_opamp_server` database, then run the bootstrap and `migrate up` again
 ([docs/database.md](docs/database.md)); everything in it is lost.
 
 ## Documentation

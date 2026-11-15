@@ -108,7 +108,7 @@ spec:
                   name: {{ $secret | quote }}
                   key: owner-password
             - name: OPAMP_MIGRATION_DATABASE_URL
-              value: {{ include "opamp-server.databaseUrl" (list $ "telflo_opamp_owner" "OPAMP_OWNER_PASSWORD") | quote }}
+              value: {{ include "opamp-server.databaseUrl" (list $ "telflo_opamp_server_owner" "OPAMP_OWNER_PASSWORD") | quote }}
             {{- end }}
           {{- with $c.resources }}
           resources:
@@ -139,7 +139,7 @@ spec:
                   name: {{ $secret | quote }}
                   key: runtime-password
             - name: OPAMP_DATABASE_URL
-              value: {{ include "opamp-server.databaseUrl" (list $ "telflo_opamp" "OPAMP_RUNTIME_PASSWORD") | quote }}
+              value: {{ include "opamp-server.databaseUrl" (list $ "telflo_opamp_server" "OPAMP_RUNTIME_PASSWORD") | quote }}
             {{- end }}
             {{- if not $agent }}
             - name: OPAMP_MANAGEMENT_SECRET

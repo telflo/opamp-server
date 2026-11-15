@@ -2,7 +2,7 @@
 // tokens and are managed together, server-class only (`server` and
 // `kubernetes-supervisor`).
 //
-// Its implementation is Postgres (what `serve` uses, on telflo_opamp.fleets
+// Its implementation is Postgres (what `serve` uses, on opamp_server.fleets
 // and the tables a fleet's creation writes), and the contract tests hold it
 // to these rules:
 //

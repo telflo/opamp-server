@@ -5,7 +5,7 @@
 // own.
 //
 // Its implementation is Postgres (what `serve` uses, on
-// telflo_opamp.collector_groups), and the contract tests hold it to these
+// opamp_server.collector_groups), and the contract tests hold it to these
 // rules:
 //
 //   - every method takes the organization and the fleet, and touches their

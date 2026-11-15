@@ -3,7 +3,7 @@
 // under them, each with a display name.
 //
 // Its implementation is Postgres (what `serve` uses, on the
-// telflo_opamp.organizations table), and the contract tests hold it to these
+// opamp_server.organizations table), and the contract tests hold it to these
 // rules:
 //
 //   - every method takes the organization's id, and touches that

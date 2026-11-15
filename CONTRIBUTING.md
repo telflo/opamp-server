@@ -20,7 +20,7 @@ Go module's gates are:
    removes one runs `scripts/check-test-inventory.sh --update` and commits
    the file with it, so a lost test shows in review;
 4. `scripts/check-licenses.sh` and its self-test (below);
-5. `scripts/check-bootstrap.sh telflo_opamp_bootstrap_test`: the bootstrap,
+5. `scripts/check-bootstrap.sh telflo_opamp_server_bootstrap_test`: the bootstrap,
    run twice, changes nothing the second time;
 6. `go test -race -count=1 -json ./...`, and no test may skip itself.
 
@@ -88,9 +88,9 @@ That works once every module the gates need has been downloaded once.
 
 ## SQL
 
-- **Every statement names the schema**: `telflo_opamp.publications`, never
+- **Every statement names the schema**: `opamp_server.publications`, never
   `publications`. The runtime role's `search_path` is pinned to
-  `telflo_opamp`, but no code relies on it: a statement that works only
+  `opamp_server`, but no code relies on it: a statement that works only
   because of a `search_path` breaks for an operator whose server logs in
   under another role, and a stray unqualified name could resolve into
   `public`.
@@ -107,7 +107,7 @@ That works once every module the gates need has been downloaded once.
   across organizations (by Postgres 18's skip scan on `(organization_id,
   reported_at)`). A new exception is a decision of its own, named in its
   store's package comment.
-- **No foreign key leaves `telflo_opamp`**
+- **No foreign key leaves `opamp_server`**
   (`docs/decisions/0001-reached-only-through-its-api.md`); a test checks
   the catalog. A caller's other ids (its configurations, versions, people)
   are plain values. **Inside it, every link between an organization's rows
@@ -219,7 +219,7 @@ run in a transaction:
 - **an applied migration is never edited.** Two edits in place were made
   before any production install; there will be no more;
 - Down revokes every grant its Up made;
-- grants to `telflo_opamp_runtime` are explicit and minimal (no `update`
+- grants to `telflo_opamp_server_runtime` are explicit and minimal (no `update`
   on an immutable table), and
   `TestRuntimeRolePrivilegesAreExactlyWhatTheServerNeeds` holds them, so a
   new grant changes that test in the same commit;
@@ -376,10 +376,10 @@ keys only).
 - **Tests that need Postgres use `store/database/databasetest`**:
   - one setting, `OPAMP_TEST_ADMIN_DATABASE_URL`, a superuser URL to the
     server; the harness derives the owner's and the runtime role's URLs;
-  - one database per package, `telflo_opamp_<package>_test`, since `go
+  - one database per package, `telflo_opamp_server_<package>_test`, since `go
     test ./...` runs packages in parallel; `databasetest.New` drops and
     recreates it for each test that asks, as a copy of the package's
-    template (`telflo_opamp_<package>_template_test`, migrated once per
+    template (`telflo_opamp_server_<package>_template_test`, migrated once per
     test process, then copied with `create database … template`), and
     refuses any name not ending in `_test`. A copy doesn't carry the
     database's own privileges, so the harness sets them on every copy, as

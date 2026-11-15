@@ -4,7 +4,7 @@
 // seen.
 //
 // Its implementation is Postgres (what `serve` uses, on
-// telflo_opamp.collector_instances and collector_errors), and the contract
+// opamp_server.collector_instances and collector_errors), and the contract
 // tests hold it to these rules:
 //
 //   - every method takes the organization, and the fleet where the row is a

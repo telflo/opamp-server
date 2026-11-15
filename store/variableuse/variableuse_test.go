@@ -21,7 +21,7 @@ import (
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests").
-const testDatabase = "telflo_opamp_variableuse_test"
+const testDatabase = "telflo_opamp_server_variableuse_test"
 
 // helpers calls variableuse, each call in its own transaction of the
 // server's role, the organization's row locked first as a caller does
@@ -111,7 +111,7 @@ func publish(t *testing.T, s *storetest.Stores, org, id uuid.UUID, yaml string) 
 func publishWithoutNames(t *testing.T, s *storetest.Stores, org, id uuid.UUID, yaml string) {
 	t.Helper()
 	if _, err := s.Databases.Runtime.Exec(context.Background(), `
-		insert into telflo_opamp.publications (id, organization_id, configuration_id, configuration_name,
+		insert into opamp_server.publications (id, organization_id, configuration_id, configuration_name,
 		  version_id, version_number, yaml, sha256, published_at, received_at, collector_distribution, collector_version)
 		values ($1, $2, $3, 'old', $4, 1, $5, $6, $7, $7, 'otelcol-contrib', '0.162.0')`,
 		id, org, uuid.New(), uuid.New(), yaml, strings.Repeat("ab", 32), storetest.Now); err != nil {
@@ -125,7 +125,7 @@ func define(t *testing.T, s *storetest.Stores, org uuid.UUID, name string) {
 	t.Helper()
 	id := uuid.New()
 	if _, err := s.Databases.Runtime.Exec(context.Background(), `
-		insert into telflo_opamp.variables (id, organization_id, name, description, value,
+		insert into opamp_server.variables (id, organization_id, name, description, value,
 		  changed_by_id, changed_by_email, changed_at, stamp)
 		values ($1, $2, $3, null, 'v', null, null, $4, 1)`, id, org, name, storetest.Now); err != nil {
 		t.Fatal(err)
@@ -137,7 +137,7 @@ func newVariableGroup(t *testing.T, s *storetest.Stores, org uuid.UUID, name str
 	t.Helper()
 	id := uuid.New()
 	if _, err := s.Databases.Runtime.Exec(context.Background(), `
-		insert into telflo_opamp.variable_groups (id, organization_id, name, description,
+		insert into opamp_server.variable_groups (id, organization_id, name, description,
 		  changed_by_id, changed_by_email, changed_at)
 		values ($1, $2, $3, null, null, null, $4)`, id, org, name, storetest.Now); err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func newVariableGroup(t *testing.T, s *storetest.Stores, org uuid.UUID, name str
 func bindGroup(t *testing.T, s *storetest.Stores, org, groupID, vg uuid.UUID) {
 	t.Helper()
 	if tag, err := s.Databases.Runtime.Exec(context.Background(), `
-		update telflo_opamp.collector_groups set variable_group_id = $3, variable_group_stamp = 1
+		update opamp_server.collector_groups set variable_group_id = $3, variable_group_stamp = 1
 		 where organization_id = $1 and id = $2`, org, groupID, vg); err != nil || tag.RowsAffected() != 1 {
 		t.Fatalf("binding group %s: %v, %v", groupID, tag, err)
 	}
@@ -161,7 +161,7 @@ func bindGroup(t *testing.T, s *storetest.Stores, org, groupID, vg uuid.UUID) {
 func pinVariableGroup(t *testing.T, s *storetest.Stores, org, collectorID, vg uuid.UUID) {
 	t.Helper()
 	if tag, err := s.Databases.Runtime.Exec(context.Background(), `
-		update telflo_opamp.collector_instances set pinned_variable_group_id = $3, pinned_variable_group_stamp = 1
+		update opamp_server.collector_instances set pinned_variable_group_id = $3, pinned_variable_group_stamp = 1
 		 where organization_id = $1 and id = $2`, org, collectorID, vg); err != nil || tag.RowsAffected() != 1 {
 		t.Fatalf("pinning a variable group on %s: %v, %v", collectorID, tag, err)
 	}
@@ -206,7 +206,7 @@ func (f *fleet) group(assigned *uuid.UUID) variableuse.GroupRef {
 func (f *fleet) assign(groupID, publicationID uuid.UUID) {
 	f.t.Helper()
 	if tag, err := f.s.Databases.Runtime.Exec(context.Background(), `
-		update telflo_opamp.collector_groups set assigned_publication_id = $3
+		update opamp_server.collector_groups set assigned_publication_id = $3
 		 where organization_id = $1 and id = $2`, f.org, groupID, publicationID); err != nil || tag.RowsAffected() != 1 {
 		f.t.Fatalf("assigning group %s: %v, %v", groupID, tag, err)
 	}
@@ -505,7 +505,7 @@ func TestBumpMovesTheCounterByOneUnderTheOrganizationsLock(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() { _ = tx.Rollback(ctx) }()
-			_, err = tx.Exec(ctx, `select 1 from telflo_opamp.organizations where id = $1 for `+mode+` nowait`, storetest.OrgA)
+			_, err = tx.Exec(ctx, `select 1 from opamp_server.organizations where id = $1 for `+mode+` nowait`, storetest.OrgA)
 			return err
 		}
 		var pgErr *pgconn.PgError

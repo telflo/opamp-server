@@ -12,7 +12,7 @@ command.)
 ```text
 collectors ──▶ opamp-server serve agent       (port 51234) ──┐
                                                              ├──▶ PostgreSQL
-you, tools ──▶ opamp-server serve management  (port 51235) ──┘    database telflo_opamp
+you, tools ──▶ opamp-server serve management  (port 51235) ──┘    database telflo_opamp_server
 ```
 
 Two processes from one binary: the agent endpoint, which collectors poll,
@@ -58,7 +58,7 @@ commands as its arguments (`serve agent`, `serve management`,
 
 ## 2. Set up PostgreSQL
 
-opamp-server keeps everything in one PostgreSQL database, `telflo_opamp`,
+opamp-server keeps everything in one PostgreSQL database, `telflo_opamp_server`,
 and divides the rights over it among three roles: PostgreSQL's
 **superuser**, which creates the database and the other two roles; an
 **owner**, which creates and upgrades the tables; and a **read/write**

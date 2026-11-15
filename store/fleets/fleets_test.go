@@ -17,7 +17,7 @@ import (
 )
 
 // This package's own test database (CONTRIBUTING.md, "Tests").
-const testDatabase = "telflo_opamp_fleets_test"
+const testDatabase = "telflo_opamp_server_fleets_test"
 
 var ctx = context.Background()
 
@@ -217,7 +217,7 @@ func TestTwoSimultaneousIdenticalCreatesAreOneCreatedAndOneUnchanged(t *testing.
 					t.Fatal(err)
 				}
 				defer func() { _ = blocker.Rollback(ctx) }()
-				if _, err := blocker.Exec(ctx, `select 1 from telflo_opamp.organizations where id = $1 for update`, OrgA); err != nil {
+				if _, err := blocker.Exec(ctx, `select 1 from opamp_server.organizations where id = $1 for update`, OrgA); err != nil {
 					t.Fatal(err)
 				}
 				release = func() {

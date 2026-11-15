@@ -25,7 +25,7 @@ import (
 
 // testDatabase is this package's test database: each package has its own
 // name, since packages' tests run at once.
-const testDatabase = "telflo_opamp_serve_test"
+const testDatabase = "telflo_opamp_server_serve_test"
 
 // The test credentials: the management secret, the server URL collectors
 // are handed, and the enrollment tokens' keys (the current one mints, the

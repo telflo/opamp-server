@@ -1,5 +1,5 @@
 // Package storetest runs the fleet model's contract tests against its
-// Postgres stores, on a fresh, migrated database, as telflo_opamp (the
+// Postgres stores, on a fresh, migrated database, as telflo_opamp_server (the
 // server's role, with its real grants). Only tests import it.
 //
 // Each test gets two registered organizations, A and B, each holding one
@@ -88,7 +88,7 @@ func Each(t *testing.T, name string, test func(t *testing.T, s *Stores), opt ...
 }
 
 // Postgres is every store on a fresh, migrated database name (which must end
-// in _test), as telflo_opamp (the server's role, with its real grants),
+// in _test), as telflo_opamp_server (the server's role, with its real grants),
 // seeded with A and B. It skips the test when OPAMP_TEST_ADMIN_DATABASE_URL
 // is unset.
 func Postgres(t *testing.T, name string, opt ...Option) *Stores {
@@ -154,7 +154,7 @@ func (s *Stores) InsertCollector(t *testing.T, c Collector) {
 	t.Helper()
 	seen := Millisecond(c.LastSeenAt)
 	if _, err := s.Databases.Runtime.Exec(context.Background(), `
-		insert into telflo_opamp.collector_instances (id, organization_id, fleet_id, collector_group_id,
+		insert into opamp_server.collector_instances (id, organization_id, fleet_id, collector_group_id,
 		  instance_uid, name, pinned_publication_id, enrollment_token_id, pinned_variable_group_id,
 		  last_seen_at, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $10)`,
@@ -171,7 +171,7 @@ func (s *Stores) CollectorGroup(t *testing.T, organizationID, id uuid.UUID) (uui
 	var group uuid.UUID
 	var updatedAt time.Time
 	if err := s.Databases.Owner.QueryRow(context.Background(), `
-		select collector_group_id, updated_at from telflo_opamp.collector_instances
+		select collector_group_id, updated_at from opamp_server.collector_instances
 		 where organization_id = $1 and id = $2`, organizationID, id).Scan(&group, &updatedAt); err != nil {
 		t.Fatalf("reading collector %s: %v", id, err)
 	}
@@ -190,7 +190,7 @@ func (s *Stores) FleetRows(t *testing.T, fleetID uuid.UUID) map[string]int {
 		}
 		var n int
 		if err := s.Databases.Owner.QueryRow(context.Background(),
-			"select count(*) from telflo_opamp."+table+" where "+column+" = $1", fleetID).Scan(&n); err != nil {
+			"select count(*) from opamp_server."+table+" where "+column+" = $1", fleetID).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		counts[table] = n
@@ -201,7 +201,7 @@ func (s *Stores) FleetRows(t *testing.T, fleetID uuid.UUID) map[string]int {
 // Dump is every row the organization holds, in every table, as text in a
 // stable order: compared before and after a call, it shows the call
 // changed nothing of the organization's. It walks the catalogue (every
-// table of telflo_opamp but goose's and the server's own, as the schema
+// table of opamp_server but goose's and the server's own, as the schema
 // tests' organizationRowsByTable does), so a new table can't be missed; a
 // table without organization_id fails the test.
 func (s *Stores) Dump(t *testing.T, organizationID uuid.UUID) string {
@@ -213,7 +213,7 @@ func (s *Stores) Dump(t *testing.T, organizationID uuid.UUID) string {
 		       exists (select 1 from pg_attribute a
 		                where a.attrelid = c.oid and a.attname = 'organization_id' and not a.attisdropped)
 		  from pg_class c
-		 where c.relnamespace = 'telflo_opamp'::regnamespace and c.relkind = 'r'
+		 where c.relnamespace = 'opamp_server'::regnamespace and c.relkind = 'r'
 		   and c.relname not in ('goose_db_version', '`+database.ServerTable+`')
 		 order by 1`)
 	if err != nil {
@@ -236,9 +236,9 @@ func (s *Stores) Dump(t *testing.T, organizationID uuid.UUID) string {
 		if tb.name == "organizations" {
 			column = "id"
 		} else if !tb.hasOrganizationID {
-			t.Fatalf("telflo_opamp.%s has no organization_id", tb.name)
+			t.Fatalf("opamp_server.%s has no organization_id", tb.name)
 		}
-		rows, err := s.Databases.Owner.Query(ctx, "select r::text from telflo_opamp."+pgx.Identifier{tb.name}.Sanitize()+
+		rows, err := s.Databases.Owner.Query(ctx, "select r::text from opamp_server."+pgx.Identifier{tb.name}.Sanitize()+
 			" r where "+column+" = $1", organizationID)
 		if err != nil {
 			t.Fatal(err)

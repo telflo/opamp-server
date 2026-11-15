@@ -1,6 +1,6 @@
 # Collector state model
 
-This document explains the columns of `telflo_opamp.collector_instances`
+This document explains the columns of `opamp_server.collector_instances`
 that say what a collector should run, what it was served and what it
 reports, the OpAMP messages they come from, and how the server computes a
 collector's sync and liveness from them, organization variables
@@ -193,7 +193,7 @@ repeats a push.
 ## Organization variables
 
 An organization's variables, its variable groups and their overrides live
-in `telflo_opamp` (`variables`, `variable_groups`,
+in `opamp_server` (`variables`, `variable_groups`,
 `variable_group_overrides`, migration 00012) behind the management API, and
 the poll fills a published version's `${org:NAME}` references in with
 them. There are no secret variables:
@@ -413,7 +413,7 @@ supervisor usually keeps the previous one running, and
 
 ## The error history
 
-`telflo_opamp.collector_errors`: one row per FAILED report (and per
+`opamp_server.collector_errors`: one row per FAILED report (and per
 health-gated APPLIED), with its message and the hash it failed to apply,
 so a transient failure that since recovered stays visible after
 `effective_error` clears. The newest 100 per collector, and 30 days at most

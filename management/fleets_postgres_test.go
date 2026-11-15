@@ -23,7 +23,7 @@ import (
 )
 
 // postgresFleetServer is a Server over every Postgres store on a fresh,
-// migrated database, as telflo_opamp, with organizations A and B
+// migrated database, as telflo_opamp_server, with organizations A and B
 // registered; and its log.
 func postgresFleetServer(t *testing.T) (*Server, *testClock, *syncBuffer, *databasetest.Databases) {
 	t.Helper()
@@ -45,7 +45,7 @@ func eventRows(t *testing.T, d *databasetest.Databases, fleetID string) []string
 	t.Helper()
 	rows, err := d.Admin.Query(context.Background(), `
 		select event || ' ' || enrollment_token_id || ' ' || coalesce(actor_email, '-')
-		  from telflo_opamp.enrollment_token_events
+		  from opamp_server.enrollment_token_events
 		 where fleet_id = $1
 		 order by occurred_at desc, event`, fleetID)
 	if err != nil {
@@ -78,8 +78,8 @@ func TestFleetCreateRotateRevealAndRevokeOnPostgres(t *testing.T) {
 	}
 	var groups, tokenRows int
 	if err := d.Admin.QueryRow(context.Background(), `select
-		(select count(*) from telflo_opamp.collector_groups where fleet_id = $1 and is_default and name = 'Default' and id = $2),
-		(select count(*) from telflo_opamp.enrollment_tokens where fleet_id = $1)`, fleetA, c.DefaultGroup.ID).Scan(&groups, &tokenRows); err != nil {
+		(select count(*) from opamp_server.collector_groups where fleet_id = $1 and is_default and name = 'Default' and id = $2),
+		(select count(*) from opamp_server.enrollment_tokens where fleet_id = $1)`, fleetA, c.DefaultGroup.ID).Scan(&groups, &tokenRows); err != nil {
 		t.Fatal(err)
 	}
 	if groups != 1 || tokenRows != 2 || len(eventRows(t, d, fleetA)) != 2 {

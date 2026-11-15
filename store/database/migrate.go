@@ -23,10 +23,10 @@ type Migrator struct {
 }
 
 // OpenMigrator connects to the database named by url and prepares goose:
-// it refuses a server where telflo_opamp_runtime doesn't exist (the
+// it refuses a server where telflo_opamp_server_runtime doesn't exist (the
 // migrations grant to it, so bootstrap.sql must have run) and a role that
 // doesn't own the database (checkOwnsDatabase), creates the
-// telflo_opamp schema if missing (goose's version table lives in it), and
+// opamp_server schema if missing (goose's version table lives in it), and
 // takes goose's Postgres session lock while it migrates, so two `migrate`
 // runs at once take turns. Each migration runs in a transaction. Its errors
 // never quote the URL or the database driver's text (DescribeError); the
@@ -152,7 +152,7 @@ func LatestMigration() (int64, error) {
 }
 
 // checkOwnsDatabase refuses to migrate as any role but the database's owner
-// (telflo_opamp_owner, which bootstrap.sql makes the owner), with a message
+// (telflo_opamp_server_owner, which bootstrap.sql makes the owner), with a message
 // saying what to set, rather than the bare "permission denied" (42501) the
 // first `create schema` would otherwise end on.
 //
@@ -162,7 +162,7 @@ func LatestMigration() (int64, error) {
 // same role: a superuser's or a member's run would leave the schema and its
 // tables owned by that role, out of the owner's reach (and a superuser
 // would hide a missing grant that the real owner then hits in production).
-// Checking the database's owner rather than the name telflo_opamp_owner
+// Checking the database's owner rather than the name telflo_opamp_server_owner
 // also serves a self-hoster whose bootstrap names the owner differently.
 func checkOwnsDatabase(ctx context.Context, db *sql.DB) error {
 	var role, databaseName, owner string

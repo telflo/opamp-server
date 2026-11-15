@@ -4,7 +4,7 @@
 // versions that reference a name, and what uses a variable group.
 //
 // The names a published version references are written at publish only, by
-// publications.Put, into telflo_opamp.publication_variable_names. A version
+// publications.Put, into opamp_server.publication_variable_names. A version
 // published before migration 00012 has none until it is republished, so
 // these helpers never count it: no backfill, no extraction later.
 //
