@@ -1,6 +1,6 @@
 module github.com/telflo/opamp-server
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/awnumar/memcall v0.4.0 // indirect

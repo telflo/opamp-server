@@ -616,7 +616,7 @@ your machine, start the server in step 2 with
 | Helm | 3 or later | |
 | Release binaries | Linux and macOS, amd64 and arm64 | |
 | Image | `linux/amd64` and `linux/arm64`, distroless, non-root | |
-| Building from source | Go 1.27.3 (`go.mod`) | |
+| Building from source | Go 1.27.4 (`go.mod`) | |
 
 ## Settings
 
