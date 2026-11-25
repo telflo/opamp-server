@@ -76,7 +76,7 @@ somewhere safe.
 **2. The chart:**
 
 ```sh
-helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.3.0 -n opamp \
+helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.3.1 -n opamp \
   --set auth.existingSecret=opamp-server \
   --set postgres.auth.existingSecret=opamp-server-postgres \
   --set server.publicUrl=https://opamp.example.com/opamp/api/v1
@@ -203,7 +203,7 @@ the result at every start and refuses a role or a database set up more
 loosely.
 
 ```sh
-helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.3.0 -n opamp \
+helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.3.1 -n opamp \
   --set auth.existingSecret=opamp-server \
   --set postgres.enabled=false \
   --set externalDatabase.host=db.internal \
