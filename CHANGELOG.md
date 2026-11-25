@@ -5,6 +5,12 @@ act when you upgrade; [docs/upgrading.md](docs/upgrading.md) says what to
 do. Each release's binaries, image and chart are on its
 [GitHub release](https://github.com/telflo/opamp-server/releases).
 
+## 0.3.1 (2026-11-25)
+
+- golang.org/x/net is 0.63.0, with golang.org/x/crypto 0.59.0,
+  golang.org/x/sync 0.25.0, golang.org/x/sys 0.50.0 and golang.org/x/text
+  0.44.0. No schema change.
+
 ## 0.3.0 (2026-11-15)
 
 - **Breaking.** The database, its schema and its roles are renamed, so
