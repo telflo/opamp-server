@@ -450,7 +450,8 @@ path.
 - `make check` passes on every commit you push. CI
   (`.github/workflows/ci.yml`) runs the same gates on every pull request
   and every push to `main`: the secret scan as its own job, then `make
-  check`, govulncheck, the image and the binaries, side by side. Its `ci`
+  check`, govulncheck, the image, the binaries and CodeQL's code
+  scanning, side by side. Its `ci`
   job passes only when every other job passed, and is the one check a
   pull request needs.
 - Never commit a secret: development values live only in `compose.yaml`,
