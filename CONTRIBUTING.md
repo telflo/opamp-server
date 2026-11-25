@@ -7,8 +7,17 @@ it is built the way it is.
 ## Before you push: `make check`
 
 `make check` runs every gate, in order, and stops at the first failure.
-Every gate can also run alone (`make go-vet`; `make help` lists them). The
-Go module's gates are:
+Every gate can also run alone (`make go-vet`; `make help` lists them).
+
+The first is the secret scan, `make secrets`: `scripts/check-secrets.sh`
+runs gitleaks (pinned, built with `go install`) over every file git would
+commit, tracked or not, but never an ignored one, then its self-test. It
+reads only `.gitleaks.toml`, which keeps every default rule and allows
+reviewed example and test values, each by its value, never by its file. A
+new test value that gitleaks flags is added there in the same commit, after
+review. It prints a finding's file, rule and line, never its value.
+
+The Go module's gates are:
 
 1. `go mod tidy -diff` and `go mod verify`: `go.mod` and `go.sum` say
    exactly what the code imports, and every downloaded module matches its
@@ -438,7 +447,12 @@ path.
 - One change per commit where you can, with its tests and docs in the same
   commit (a new route and its `openapi.yaml` entry; a new grant and the
   privileges test).
-- `make check` passes on every commit you push.
+- `make check` passes on every commit you push. CI
+  (`.github/workflows/ci.yml`) runs the same gates on every pull request
+  and every push to `main`: the secret scan as its own job, then `make
+  check`, govulncheck, the image and the binaries, side by side. Its `ci`
+  job passes only when every other job passed, and is the one check a
+  pull request needs.
 - Never commit a secret: development values live only in `compose.yaml`,
   which is for development and public.
 
