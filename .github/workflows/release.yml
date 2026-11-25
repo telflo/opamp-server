@@ -70,8 +70,13 @@ jobs:
             echo "::error::$chart at $TAG has version '$chart_version' and appVersion '$app_version': both must be $VERSION"; exit 1
           fi
 
+  # ci.yml's codeql job uploads its results to code scanning, so the call
+  # grants that one write; every other job in it reads only.
   ci:
     needs: version
+    permissions:
+      contents: read
+      security-events: write
     uses: ./.github/workflows/ci.yml
     with:
       ref: refs/tags/${{ needs.version.outputs.tag }}

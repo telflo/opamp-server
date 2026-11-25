@@ -140,11 +140,50 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # CodeQL's code scanning, of the Go code and of these workflows, with its
+  # default queries. The job passes when the analysis runs; what it finds
+  # goes to the Security tab, and GitHub's own "CodeQL" check on a pull
+  # request lists the alerts the change adds. The category is GitHub's
+  # default setup's, so alerts keep their history. That setup must stay off
+  # (Settings → Code security): it refuses uploads from a workflow.
+  codeql:
+    name: codeql (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: go
+            build-mode: autobuild
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - if: matrix.language == 'go'
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}
+
   # The one check branch protection needs: it passes only when every job
   # above passed (a failed, cancelled or skipped job fails it), so adding or
   # splitting a job never needs a settings change.
   ci:
-    needs: [secrets, check, govulncheck, image, binaries]
+    needs: [secrets, check, govulncheck, image, binaries, codeql]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
