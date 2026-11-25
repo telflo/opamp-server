@@ -40,10 +40,12 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
+      # No Go cache: gitleaks builds in seconds, and a job that writes no
+      # cache can't poison one main's runs read.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          cache: false
       - run: make secrets
 
   check:
