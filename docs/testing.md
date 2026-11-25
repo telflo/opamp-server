@@ -1,6 +1,7 @@
 # Running the tests
 
-`make check` runs every gate this repository has: the Go module's (tidy,
+`make check` runs every gate this repository has: the secret scan
+(gitleaks, and its self-test), the Go module's (tidy,
 verify, gofmt, vet, the licence check and its self-test, the bootstrap
 check, `go test -race` with no skipped test) and those of the chart and the
 scripts. It needs a **superuser** Postgres it never starts itself; for

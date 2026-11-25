@@ -1,8 +1,9 @@
 # gitleaks reads this file from the repository's root (gitleaks dir . or
-# gitleaks git .). It keeps every default rule, and allows only the values
-# below: each is an example or a test value, never a real secret. Allow a new
-# one by its value, never by its file, so a real secret pasted beside it is
-# still found.
+# gitleaks git .), and `make secrets` (scripts/check-secrets.sh) reads it
+# and nothing else, in CI too. It keeps every default rule, and allows only
+# the values below: each is an example or a test value, never a real secret.
+# Allow a new one by its value, never by its file, so a real secret pasted
+# beside it is still found.
 
 [extend]
 useDefault = true

@@ -30,6 +30,22 @@ env:
   GOTOOLCHAIN: local
 
 jobs:
+  # The secret scan alone, so a leak fails within a minute. `make check`
+  # runs it again with the other gates.
+  secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: make secrets
+
   check:
     name: make check
     runs-on: ubuntu-24.04
@@ -123,3 +139,21 @@ jobs:
             dist/checksums.txt
           if-no-files-found: error
           retention-days: 30
+
+  # The one check branch protection needs: it passes only when every job
+  # above passed (a failed, cancelled or skipped job fails it), so adding or
+  # splitting a job never needs a settings change.
+  ci:
+    needs: [secrets, check, govulncheck, image, binaries]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      RESULTS: ${{ join(needs.*.result, ' ') }}
+    steps:
+      - name: Every job passed
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = success ] || { echo "a job ended $result"; exit 1; }
+          done
