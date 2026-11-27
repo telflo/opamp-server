@@ -585,6 +585,8 @@ func canaryText(t *testing.T) string {
 // boolean and never printed (a failure names the path, not what leaked).
 // What each path reports shows it reached the database driver.
 func TestDatabaseErrorsQuoteNoPartOfThePassword(t *testing.T) {
+	// The "@" password's host doesn't resolve, which migrate tries again.
+	shortConnectRetry(t)
 	d := databasetest.New(t, testDatabase)
 	u, err := url.Parse(d.RuntimeURL)
 	if err != nil {
@@ -776,6 +778,114 @@ func TestMigrateUpStatusAndDownThroughTheCommandLine(t *testing.T) {
 	}
 }
 
+// shortConnectRetry shortens migrate's retries for the rest of the test, to
+// a few attempts within a couple of seconds.
+func shortConnectRetry(t *testing.T) {
+	t.Helper()
+	budget, first, most := connectRetryBudget, connectRetryFirst, connectRetryMax
+	connectRetryBudget, connectRetryFirst, connectRetryMax = 2*time.Second, 50*time.Millisecond, 200*time.Millisecond
+	t.Cleanup(func() { connectRetryBudget, connectRetryFirst, connectRetryMax = budget, first, most })
+}
+
+// retries counts a migrate log's lines saying it will try again.
+func retries(log string) int {
+	return strings.Count(log, "; trying again")
+}
+
+// migrate keeps trying a database it can't reach, logging each failed
+// attempt, then exits 1 saying how many it made.
+func TestMigrateTriesAnUnreachableDatabaseAgainThenGivesUp(t *testing.T) {
+	shortConnectRetry(t)
+	code, log := runCommand(t, map[string]string{migrationDatabaseURLVariable: unreachableURL}, "migrate", "up")
+	if code != 1 {
+		t.Fatalf("migrate up against a closed port exited %d, want 1: %s", code, log)
+	}
+	n := retries(log)
+	if n < 2 {
+		t.Fatalf("migrate up logged %d attempts to try again, want at least 2: %s", n, log)
+	}
+	want := fmt.Sprintf("migrate: can't connect to the database: the database's host can't be reached or its name resolved (gave up after %d attempts in ", n+1)
+	if !strings.Contains(log, want) {
+		t.Errorf("the log lacks %q: %s", want, log)
+	}
+}
+
+// turnAwayProxy listens on the loopback and closes the first turnAway
+// connections at once, as a database still starting can; it forwards each
+// later one to upstream. It answers its address.
+func turnAwayProxy(t *testing.T, upstream string, turnAway int) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for accepted := 0; ; accepted++ {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			if accepted < turnAway {
+				_ = conn.Close()
+				continue
+			}
+			go func() {
+				defer func() { _ = conn.Close() }()
+				up, err := net.Dial("tcp", upstream)
+				if err != nil {
+					return
+				}
+				defer func() { _ = up.Close() }()
+				go func() { _, _ = io.Copy(up, conn) }()
+				_, _ = io.Copy(conn, up)
+			}()
+		}
+	}()
+	return listener.Addr().String()
+}
+
+// A database that turns migrate away while it starts is tried again, and
+// migrate up goes on once it answers.
+func TestMigrateUpWaitsForADatabaseThatAnswersLate(t *testing.T) {
+	shortConnectRetry(t)
+	d := databasetest.New(t, testDatabase, databasetest.Unmigrated())
+	u, err := url.Parse(d.OwnerURL)
+	if err != nil {
+		t.Fatal("the owner URL doesn't parse")
+	}
+	u.Host = turnAwayProxy(t, u.Host, 2)
+	// One connection an attempt (sslmode=prefer would make two).
+	q := u.Query()
+	q.Set("sslmode", "disable")
+	u.RawQuery = q.Encode()
+	code, log := runCommand(t, map[string]string{migrationDatabaseURLVariable: u.String()}, "migrate", "up")
+	if code != 0 {
+		t.Fatalf("migrate up exited %d, want 0: %s", code, log)
+	}
+	if n := retries(log); n != 2 {
+		t.Errorf("migrate up logged %d attempts to try again, want 2: %s", n, log)
+	}
+}
+
+// An answer no retry changes ends migrate at the first attempt.
+func TestMigrateDoesNotTryAFailedAuthenticationAgain(t *testing.T) {
+	shortConnectRetry(t)
+	d := databasetest.New(t, testDatabase, databasetest.Unmigrated())
+	u, err := url.Parse(d.OwnerURL)
+	if err != nil {
+		t.Fatal("the owner URL doesn't parse")
+	}
+	u.User = url.UserPassword(database.OwnerRole, "not-the-owners-password")
+	code, log := runCommand(t, map[string]string{migrationDatabaseURLVariable: u.String()}, "migrate", "up")
+	if code != 1 || !strings.Contains(log, "authentication failed (SQLSTATE 28P01)") {
+		t.Fatalf("migrate up with a wrong password exited %d, want 1 and a failed authentication: %s", code, log)
+	}
+	if n := retries(log); n != 0 {
+		t.Errorf("migrate up tried a failed authentication again %d times: %s", n, log)
+	}
+}
+
 // `migrate` as the server's role is refused with a message naming the
 // setting and the owner role, not the bare permission error (42501) the
 // first `create schema` would end on.
@@ -792,6 +902,9 @@ func TestMigrateAsTheServerRoleIsRefusedNamingTheOwner(t *testing.T) {
 		if !strings.Contains(log, want) {
 			t.Errorf("the log lacks %q: %s", want, log)
 		}
+	}
+	if n := retries(log); n != 0 {
+		t.Errorf("migrate up tried a refusal again %d times: %s", n, log)
 	}
 	for _, leaked := range []string{"42501", "SQLSTATE", "permission denied", databasetest.RuntimePassword} {
 		if strings.Contains(log, leaked) {

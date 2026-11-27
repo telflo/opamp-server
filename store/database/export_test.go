@@ -2,6 +2,8 @@ package database
 
 import (
 	"context"
+	"testing"
+	"time"
 
 	"github.com/pressly/goose/v3"
 )
@@ -16,4 +18,16 @@ var OpenMigratorRequiring = openMigrator
 // answers what it applied.
 func MigrateUpTo(ctx context.Context, m *Migrator, version int64) ([]*goose.MigrationResult, error) {
 	return m.provider.UpTo(ctx, version)
+}
+
+// Unavailable is unavailable, for its cases.
+var Unavailable = unavailable
+
+// ShortenOpenTimeouts sets OpenMigrator's default connect_timeout and its
+// deadline on the open for the rest of the test.
+func ShortenOpenTimeouts(t *testing.T, connect, open time.Duration) {
+	t.Helper()
+	previousConnect, previousOpen := connectTimeout, openTimeout
+	connectTimeout, openTimeout = connect, open
+	t.Cleanup(func() { connectTimeout, openTimeout = previousConnect, previousOpen })
 }
