@@ -9,10 +9,13 @@ github.com/telflo/opamp-server TestHealthcheckExitsOneWhenTheConnectionIsClosedU
 github.com/telflo/opamp-server TestHealthcheckExitsZeroAgainstARunningHealthHandler
 github.com/telflo/opamp-server TestHealthcheckRefusesOneTLSVariableOrABadHost
 github.com/telflo/opamp-server TestMigrateAsTheServerRoleIsRefusedNamingTheOwner
+github.com/telflo/opamp-server TestMigrateDoesNotTryAFailedAuthenticationAgain
 github.com/telflo/opamp-server TestMigrateDownRefusesWithoutYesDropData
 github.com/telflo/opamp-server TestMigrateDownWithoutYesDropDataLeavesTheSchema
 github.com/telflo/opamp-server TestMigrateRefusesWithoutItsURL
+github.com/telflo/opamp-server TestMigrateTriesAnUnreachableDatabaseAgainThenGivesUp
 github.com/telflo/opamp-server TestMigrateUpStatusAndDownThroughTheCommandLine
+github.com/telflo/opamp-server TestMigrateUpWaitsForADatabaseThatAnswersLate
 github.com/telflo/opamp-server TestServeAcceptsA32ByteSecretAndIgnoresEmptyPreviousEntries
 github.com/telflo/opamp-server TestServeLogsNeitherTheSecretNorABody
 github.com/telflo/opamp-server TestServeOpensTheAgentListenerBesideTheManagementAPI
@@ -533,6 +536,7 @@ github.com/telflo/opamp-server/store/database TestDescribeErrorKeepsTheTextOfAnE
 github.com/telflo/opamp-server/store/database TestDescribeErrorNamesAFailedAuthentication
 github.com/telflo/opamp-server/store/database TestDescribeErrorNamesAFailedTLSConnection
 github.com/telflo/opamp-server/store/database TestDescribeErrorNamesAHostThatCantBeReachedOrResolved
+github.com/telflo/opamp-server/store/database TestDescribeErrorNamesATimeout
 github.com/telflo/opamp-server/store/database TestEachRefusalNeedsItsConstraint
 github.com/telflo/opamp-server/store/database TestEveryCheckRefusesWhatItBounds
 github.com/telflo/opamp-server/store/database TestEveryIndexLeadsWithTheOrganization
@@ -554,6 +558,8 @@ github.com/telflo/opamp-server/store/database TestMigration2RegistersTheOrganiza
 github.com/telflo/opamp-server/store/database TestMigration3GivesExistingPublicationsTheContribCollector
 github.com/telflo/opamp-server/store/database TestMigration4DropsThePublicationCollectorsDefaults
 github.com/telflo/opamp-server/store/database TestNoForeignKeyLeavesTheSchemaAndEveryKeyCarriesTheOrganization
+github.com/telflo/opamp-server/store/database TestOpenMigratorGivesUpOnAServerThatNeverAnswers
+github.com/telflo/opamp-server/store/database TestOpenMigratorsDeadlineBoundsALongConnectTimeout
 github.com/telflo/opamp-server/store/database TestPrivilegeCheckSeesAGrantedColumnUpdate
 github.com/telflo/opamp-server/store/database TestPrivilegeCheckSeesAGrantedUpdate
 github.com/telflo/opamp-server/store/database TestPrivilegeCheckSeesTemporaryGrantedToPublic
@@ -563,6 +569,7 @@ github.com/telflo/opamp-server/store/database TestStartupChecksPassAsTheServerRo
 github.com/telflo/opamp-server/store/database TestTheKeysAndChecksAllowWhatTheSpecAllows
 github.com/telflo/opamp-server/store/database TestTheOrganizationsDeleteNeedsEveryTablesOwnCascade
 github.com/telflo/opamp-server/store/database TestThePointerCheckSeesASetNullOfEveryColumn
+github.com/telflo/opamp-server/store/database TestUnavailableIsTrueOnlyForWhatAnotherAttemptMayNotMeet
 github.com/telflo/opamp-server/store/database/databasetest TestAnAdminURLThatIsNotAURLIsRefusedWithoutQuotingIt
 github.com/telflo/opamp-server/store/database/databasetest TestCheckNameAcceptsATestDatabase
 github.com/telflo/opamp-server/store/database/databasetest TestPrepareRefusesADatabaseWhoseNameDoesNotEndInTest
