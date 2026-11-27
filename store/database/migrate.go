@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -22,15 +23,52 @@ type Migrator struct {
 	provider *goose.Provider
 }
 
+// The bounds of one OpenMigrator: pgx's connect_timeout when the URL sets
+// none (it bounds the whole handshake: the dial, TLS and authentication),
+// and a deadline on the open as a whole, the connection and the checks
+// after it. Without them a server that takes the connection but never
+// answers (a frozen process, a peer gone without a reset) holds migrate
+// for as long as TCP keeps the connection, unbounded or many minutes.
+// Variables, so a test can shorten them.
+var (
+	connectTimeout = 10 * time.Second
+	openTimeout    = 30 * time.Second
+)
+
+// ErrUnavailable marks an OpenMigrator error that says the database can't
+// be reached or can't answer yet (unavailable): worth another attempt,
+// where any other error (a URL that doesn't parse, a failed
+// authentication, a refusal) is one no retry changes.
+var ErrUnavailable = errors.New("the database is unavailable")
+
+// unavailableError is an error marked ErrUnavailable.
+type unavailableError struct{ message string }
+
+func (e *unavailableError) Error() string        { return e.message }
+func (e *unavailableError) Is(target error) bool { return target == ErrUnavailable }
+
+// failure is message followed by err's description (DescribeError), marked
+// ErrUnavailable when err is one a later attempt may not meet.
+func failure(message string, err error) error {
+	text := message + DescribeError(err)
+	if unavailable(err) {
+		return &unavailableError{text}
+	}
+	return errors.New(text)
+}
+
 // OpenMigrator connects to the database named by url and prepares goose:
 // it refuses a server where telflo_opamp_server_runtime doesn't exist (the
 // migrations grant to it, so bootstrap.sql must have run) and a role that
 // doesn't own the database (checkOwnsDatabase), creates the
 // opamp_server schema if missing (goose's version table lives in it), and
 // takes goose's Postgres session lock while it migrates, so two `migrate`
-// runs at once take turns. Each migration runs in a transaction. Its errors
-// never quote the URL or the database driver's text (DescribeError); the
-// errors of Up, Down and Status are goose's, for the caller to describe.
+// runs at once take turns. Each migration runs in a transaction. It gives
+// up after openTimeout, its connection after connect_timeout (connectTimeout
+// when the URL sets none or 0), and marks an error that another attempt may
+// not meet ErrUnavailable; it never retries itself. Its errors never quote
+// the URL or the database driver's text (DescribeError); the errors of Up,
+// Down and Status are goose's, for the caller to describe.
 func OpenMigrator(ctx context.Context, url string) (*Migrator, error) {
 	return openMigrator(ctx, url, RuntimeRole)
 }
@@ -44,9 +82,16 @@ func openMigrator(ctx context.Context, url, runtimeRole string) (*Migrator, erro
 		return nil, err
 	}
 	config.RuntimeParams["application_name"] = applicationName + " migrate"
+	if config.ConnectTimeout == 0 {
+		config.ConnectTimeout = connectTimeout
+	}
 	db := stdlib.OpenDB(*config)
 
-	migrator, err := newMigrator(ctx, db, runtimeRole)
+	// The deadline bounds the open only: the connection it leaves open, and
+	// goose's work on it, outlive it.
+	openCtx, cancel := context.WithTimeout(ctx, openTimeout)
+	defer cancel()
+	migrator, err := newMigrator(openCtx, db, runtimeRole)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
@@ -56,14 +101,14 @@ func openMigrator(ctx context.Context, url, runtimeRole string) (*Migrator, erro
 
 func newMigrator(ctx context.Context, db *sql.DB, runtimeRole string) (*Migrator, error) {
 	if err := db.PingContext(ctx); err != nil {
-		return nil, errors.New("can't connect to the database: " + DescribeError(err))
+		return nil, failure("can't connect to the database: ", err)
 	}
 
 	var runtimeRoleExists bool
 	if err := db.QueryRowContext(ctx,
 		`select exists (select 1 from pg_roles where rolname = $1)`, runtimeRole,
 	).Scan(&runtimeRoleExists); err != nil {
-		return nil, fmt.Errorf("can't look up the role %s: %s", runtimeRole, DescribeError(err))
+		return nil, failure("can't look up the role "+runtimeRole+": ", err)
 	}
 	if !runtimeRoleExists {
 		return nil, fmt.Errorf(
@@ -81,7 +126,7 @@ func newMigrator(ctx context.Context, db *sql.DB, runtimeRole string) (*Migrator
 	if _, err := db.ExecContext(ctx,
 		"create schema if not exists "+pgx.Identifier{Schema}.Sanitize(),
 	); err != nil {
-		return nil, fmt.Errorf("can't create the schema %s: %s", Schema, DescribeError(err))
+		return nil, failure("can't create the schema "+Schema+": ", err)
 	}
 
 	locker, err := lock.NewPostgresSessionLocker()
@@ -171,7 +216,7 @@ func checkOwnsDatabase(ctx context.Context, db *sql.DB) error {
 		  from pg_database d
 		 where d.datname = current_database()`,
 	).Scan(&role, &databaseName, &owner); err != nil {
-		return errors.New("can't look up the database's owner: " + DescribeError(err))
+		return failure("can't look up the database's owner: ", err)
 	}
 	if role != owner {
 		return fmt.Errorf(

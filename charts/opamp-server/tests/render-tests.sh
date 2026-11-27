@@ -457,11 +457,20 @@ previous_keys() {
   done
 }
 run_case "auth.encryptionKeysPrevious.enabled: encryption-keys-previous mounted as a required 0440 file, OPAMP_ENCRYPTION_KEYS_PREVIOUS_FILE set, no variable holds it (both)" previous_keys
-wait_holds_nothing() {
-  local w
-  for w in "$WAIT" "$WAITM"; do no_path "$L" "$w.env" && no_path "$L" "$w.envFrom" && no_path "$L" "$w.volumeMounts" || return 1; done
+# wait_for <listing> <host> <port> <user> <database>: both Deployments'
+# wait-for-postgres runs pg_isready until it answers, against libpq's PG*
+# variables and nothing else: no password, no Secret, no volume.
+wait_for() {
+  local l="$1" w
+  for w in "$WAIT" "$WAITM"; do
+    [ "$(env_names "$l" "$w" | tr '\n' ' ')" = "PGHOST PGPORT PGUSER PGDATABASE " ] &&
+      eq "$l" "$w.env[PGHOST].value" "\"$2\"" && eq "$l" "$w.env[PGPORT].value" "\"$3\"" &&
+      eq "$l" "$w.env[PGUSER].value" "\"$4\"" && eq "$l" "$w.env[PGDATABASE].value" "\"$5\"" &&
+      ! grep -qF "$w.env[" <(grep -F 'valueFrom' "$l") && no_path "$l" "$w.envFrom" && no_path "$l" "$w.volumeMounts" &&
+      eq "$l" "$w.command[2]" '"until pg_isready; do sleep 2; done"' && no_path "$l" "$w.args" || return 1
+  done
 }
-run_case "wait-for-postgres holds no credential" wait_holds_nothing
+run_case "wait-for-postgres waits for the bundled Postgres and holds no credential" wait_for "$L" "$FULL-postgres" 5432 postgres postgres
 pg_env() {
   [ "$(env_names "$L" "$PG")" = "$(lines POSTGRES_USER POSTGRES_PASSWORD OPAMP_OWNER_PASSWORD OPAMP_RUNTIME_PASSWORD OPAMP_DATABASE_NAME)" ] &&
     [ "$(secret_keys "$L" "$PG" | tr '\n' ' ')" = '"owner-password" "postgres-password" "runtime-password" ' ]
@@ -659,8 +668,13 @@ ext_kinds() {
   [ "$(kinds "$X" | tr '\n' ' ')" = "ConfigMap/$FULL-bootstrap $D $DM Service/$FULL-agent Service/$FULL-management ServiceAccount/$FULL " ]
 }
 run_case "no StatefulSet or postgres Service; the bootstrap ConfigMap still rendered" ext_kinds
-ext_no_wait() { no_path "$X" "$WAIT" && no_path "$X" "$WAITM"; }
-run_case "no wait-for-postgres init container (both)" ext_no_wait
+ext_wait_order() {
+  has_line "$X" "$POD.initContainers[wait-for-postgres]#index 0" && has_line "$X" "$POD.initContainers[migrate]#index 1" &&
+    has_line "$X" "$PODM.initContainers[wait-for-postgres]#index 0" && has_line "$X" "$PODM.initContainers[migrate]#index 1"
+}
+run_case "wait-for-postgres, then migrate, with an external Postgres too (both)" ext_wait_order
+run_case "it waits for externalDatabase's host, port and database, as the owner, and holds no credential" wait_for "$X" db.example.com 5433 telflo_opamp_server_owner opamp_db
+run_case "it runs the pinned postgres image" eq "$X" "$WAIT.image" "\"postgres:18@$PG_DIGEST\""
 ext_urls() {
   eq "$X" "$MIG.env[OPAMP_MIGRATION_DATABASE_URL].value" '"postgresql://telflo_opamp_server_owner:$(OPAMP_OWNER_PASSWORD)@db.example.com:5433/opamp_db?sslmode=verify-full"' &&
     eq "$X" "$SRV.env[OPAMP_DATABASE_URL].value" '"postgresql://telflo_opamp_server:$(OPAMP_RUNTIME_PASSWORD)@db.example.com:5433/opamp_db?sslmode=verify-full"' &&
@@ -683,6 +697,8 @@ urls_refs() {
     eq "$U" "$SRVM.env[OPAMP_DATABASE_URL].valueFrom.secretKeyRef.key" '"runtime-url"' && no_path "$U" "$SRVM.env[OPAMP_RUNTIME_PASSWORD]"
 }
 run_case "whole-URL keys: each URL from its key, no password variable" urls_refs
+urls_no_wait() { no_path "$U" "$WAIT" && no_path "$U" "$WAITM" && has_line "$U" "$POD.initContainers[migrate]#index 0"; }
+run_case "whole-URL keys: no wait-for-postgres (the chart doesn't know the host); migrate alone, which retries (both)" urls_no_wait
 urls_no_passwords() { ! grep -qE '"(owner|runtime)-password"' "$U" && ! grep -qF '$(' "$U"; }
 run_case "whole-URL keys: no secretKeyRef for the two passwords, no \$(…) anywhere" urls_no_passwords
 urls_optional() { optional_flags "$U"; }

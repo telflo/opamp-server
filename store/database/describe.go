@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"reflect"
 	"slices"
@@ -17,6 +18,7 @@ import (
 // as, or a value the database refused.
 const (
 	describedUnreachable    = "the database's host can't be reached or its name resolved"
+	describedTimeout        = "the database didn't answer in time"
 	describedTLS            = "the TLS connection to the database failed"
 	describedAuthentication = "authentication failed"
 	describedConnect        = "the connection to the database failed"
@@ -29,6 +31,8 @@ const (
 // network error, a TLS error, inside goose's errors too) is described by its
 // category alone:
 //   - authentication failed (SQLSTATE 28P01 or 28000);
+//   - the database didn't answer in time (a deadline or connect_timeout
+//     ran out, or the network timed out);
 //   - the TLS connection failed;
 //   - the host can't be reached or its name resolved;
 //   - anything else: that the connection failed, or that the database
@@ -40,12 +44,16 @@ const (
 // failure over a network one: each says more about where it went wrong.
 //
 // Only an error with no driver error inside keeps its own text (a refusal of
-// this package's, goose's "no migrations", a cancelled context).
+// this package's, goose's "no migrations", a cancelled context), except a
+// deadline that ran out, which is described as a timeout.
 func DescribeError(err error) string {
 	if err == nil {
 		return ""
 	}
 	if !anyInChain(err, isDriverError) {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return describedTimeout
+		}
 		return err.Error()
 	}
 	var connectErr *pgconn.ConnectError
@@ -61,6 +69,8 @@ func DescribeError(err error) string {
 	case errors.Is(err, context.Canceled):
 		// Cancelled (serve stopped while it started): the network error a
 		// cancelled dial answers says nothing of the host.
+	case pgconn.Timeout(err) || errors.Is(err, context.DeadlineExceeded):
+		return describedTimeout
 	case anyInChain(err, isTLSError):
 		return describedTLS
 	case anyInChain(err, isNetworkError):
@@ -70,6 +80,49 @@ func DescribeError(err error) string {
 		return describedConnect
 	}
 	return describedOther
+}
+
+// unavailable reports whether err says the database can't be reached or
+// can't answer yet, which a later attempt may not meet: a network error (no
+// route, nothing listening, a name not resolved yet), a timeout, a
+// connection that ended mid-way, or a server starting up, shutting down,
+// out of connections or reporting a connection exception (SQLSTATE class
+// 08). It is false for an answer no retry changes (a failed authentication,
+// a missing database, a certificate that doesn't verify, any other
+// SQLSTATE) and for a cancelled context (the process is stopping).
+func unavailable(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "57P01", "57P02", "57P03", "53300":
+			// admin_shutdown, crash_shutdown, cannot_connect_now (starting
+			// up), too_many_connections.
+			return true
+		}
+		return strings.HasPrefix(pgErr.Code, "08")
+	}
+	switch {
+	case pgconn.Timeout(err) || errors.Is(err, context.DeadlineExceeded):
+		return true
+	case anyInChain(err, isCertificateOrTLSError):
+		return false
+	case anyInChain(err, isNetworkError), errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return true
+	}
+	return false
+}
+
+// isCertificateOrTLSError reports whether err is the TLS package's own or a
+// certificate's: an answer from the server's TLS, not a network failure.
+func isCertificateOrTLSError(err error) bool {
+	switch packageOf(err) {
+	case "crypto/tls", "crypto/x509":
+		return true
+	}
+	return false
 }
 
 // sqlStateSuffix is " (SQLSTATE code)", or "" when code isn't a SQLSTATE

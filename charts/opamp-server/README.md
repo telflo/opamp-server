@@ -19,8 +19,12 @@ the server itself. This page covers what the chart adds.
   - `<fullname>-management` runs `serve management`, the management API.
 
   Each pod runs `migrate up` before it serves (a no-op when the schema is
-  current), so either Deployment can run alone. With the bundled Postgres,
-  it first waits for Postgres to answer. Readiness is `/ready` and liveness
+  current), so either Deployment can run alone. Its `wait-for-postgres`
+  init container first waits for Postgres to answer: the bundled one, or
+  `externalDatabase.host` (not with `externalDatabase.urlKeys`, whose host
+  the chart doesn't know; there `migrate` tries the database again itself,
+  for two minutes, then exits for Kubernetes to run it again). It runs
+  `postgres.image` either way. Readiness is `/ready` and liveness
   `/health`, on the pod's own port. `replicas: 0` stops a component: while
   the agent endpoint is stopped, collectors keep running their last
   configuration; while the management API is, its callers are refused.
@@ -76,7 +80,7 @@ somewhere safe.
 **2. The chart:**
 
 ```sh
-helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.3.1 -n opamp \
+helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.3.2 -n opamp \
   --set auth.existingSecret=opamp-server \
   --set postgres.auth.existingSecret=opamp-server-postgres \
   --set server.publicUrl=https://opamp.example.com/opamp/api/v1
@@ -174,7 +178,7 @@ A missing required key stops the pod (`CreateContainerConfigError`).
 | `networkPolicy.enabled` | `false` | Render NetworkPolicies: the agent port is open to all, the management port only to `networkPolicy.management.from`, and the bundled Postgres only to both components' pods. They take effect only where the cluster's network plugin enforces them. |
 | `networkPolicy.management.from` | `[]` | NetworkPolicy peers (`podSelector`, `namespaceSelector`, `ipBlock`) allowed to the management port. Empty: none, not even pods in the same namespace. |
 | `postgres.enabled` | `true` | Run the bundled Postgres. `false`: use `externalDatabase`. |
-| `postgres.image.repository` | `postgres` | |
+| `postgres.image.repository` | `postgres` | Also `wait-for-postgres`'s image, with an external Postgres too. |
 | `postgres.image.tag` | `"18"` | |
 | `postgres.image.digest` | `sha256:edb0c08d…` | The `postgres:18` (18.6) index digest. Empty: the tag alone, for an image loaded into the cluster by hand. |
 | `postgres.image.pullPolicy` | `IfNotPresent` | |
@@ -203,7 +207,7 @@ the result at every start and refuses a role or a database set up more
 loosely.
 
 ```sh
-helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.3.1 -n opamp \
+helm install opamp oci://ghcr.io/telflo/charts/opamp-server --version 0.3.2 -n opamp \
   --set auth.existingSecret=opamp-server \
   --set postgres.enabled=false \
   --set externalDatabase.host=db.internal \

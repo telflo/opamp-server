@@ -121,6 +121,13 @@ upgrade.
 - **`up`** creates the schema if it's missing, then applies every pending
   migration, each in its own transaction. Run it before the first `serve`
   and before rolling out each new release. Two runs at once take turns.
+- **A database that isn't up yet** is tried again. The connection gives up
+  after 10 seconds (or the URL's `connect_timeout`), and each attempt, the
+  checks after the connection included, after 30. While the database can't
+  be reached, doesn't answer, or is starting up, `migrate` logs the attempt
+  and tries again, waiting from 1 second up to 10 between attempts, for up
+  to 2 minutes, then exits 1. A failed login or a refusal (the wrong role,
+  no bootstrap) ends it at once.
 - **`status`** shows each migration's state and the database's version.
 - **`down --yes-drop-data`** rolls back the newest migration and drops its
   tables with every row in them. It's for development only.

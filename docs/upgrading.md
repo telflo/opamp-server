@@ -8,12 +8,20 @@ Each release, and the schema it brings a database to:
 
 | Release | Schema |
 |---|---|
+| 0.3.2 | 13 |
 | 0.3.1 | 13 |
 | 0.3.0 | 13 |
 | 0.2.4 | 13 |
 
 0.2.4 is the first public release. From the next one on, a section here
 for each release says what its upgrade needs from you.
+
+## 0.3.2
+
+No schema change and nothing to do: upgrade the image or the chart. With
+an external Postgres, the chart now runs `wait-for-postgres` before
+`migrate`, on `postgres.image`: if you mirror images, mirror that one
+too.
 
 ## 0.3.1
 

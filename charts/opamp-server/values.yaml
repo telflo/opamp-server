@@ -60,7 +60,7 @@ server:
   agent:
     replicas: 1
     # resources for its serve container and init containers (migrate, and
-    # wait-for-postgres with the bundled Postgres).
+    # wait-for-postgres unless externalDatabase.urlKeys is set).
     resources: {}
     podDisruptionBudget:
       enabled: false
@@ -152,6 +152,8 @@ networkPolicy:
 # first creates its data, in its own pod.
 postgres:
   enabled: true
+  # The bundled Postgres's image, and wait-for-postgres's with an external
+  # Postgres too (its pg_isready).
   image:
     repository: postgres
     tag: "18"

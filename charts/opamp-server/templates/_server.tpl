@@ -71,17 +71,41 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
+        {{- /* The Postgres wait-for-postgres waits for: the bundled one, or
+        externalDatabase's host when the chart composes the URLs (with whole
+        URLs from the Secret it doesn't know the host, and migrate's own
+        retries are all there is). */}}
+        {{- $wait := dict }}
         {{- if $.Values.postgres.enabled }}
-        # `migrate up` doesn't retry a connection, so it waits until the
-        # bundled Postgres answers on TCP, which it does only once its first
-        # start's bootstrap is done. It holds no credential.
+        {{- $wait = dict "host" (include "opamp-server.postgresName" $) "port" 5432 "user" "postgres" "database" "postgres" }}
+        {{- else if not $whole }}
+        {{- $db := $.Values.externalDatabase }}
+        {{- $wait = dict "host" $db.host "port" (int $db.port) "user" "telflo_opamp_server_owner" "database" $db.database }}
+        {{- end }}
+        {{- if $wait }}
+        # migrate waits only so long for a database that can't be reached
+        # (two minutes, then it exits and Kubernetes runs it again with a
+        # growing back-off), so on a cold start this waits first, until
+        # Postgres answers on TCP: the bundled one does once its first start's
+        # bootstrap is done. pg_isready counts any answer, a refused login
+        # included, so it sends no password and no sslmode (each try's line
+        # is its log). It holds no credential.
         - name: wait-for-postgres
           image: {{ include "opamp-server.imageRef" (list $.Values.postgres.image "18") | quote }}
           imagePullPolicy: {{ $.Values.postgres.image.pullPolicy | quote }}
           command:
             - sh
             - -c
-            - {{ printf "until pg_isready -q -h %s -p 5432 -U postgres -d postgres; do sleep 2; done" (include "opamp-server.postgresName" $) | quote }}
+            - "until pg_isready; do sleep 2; done"
+          env:
+            - name: PGHOST
+              value: {{ include "opamp-server.envLiteral" $wait.host }}
+            - name: PGPORT
+              value: {{ $wait.port | toString | quote }}
+            - name: PGUSER
+              value: {{ $wait.user | quote }}
+            - name: PGDATABASE
+              value: {{ include "opamp-server.envLiteral" $wait.database }}
           {{- with $c.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

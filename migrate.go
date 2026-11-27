@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"path"
+	"time"
 
 	"github.com/pressly/goose/v3"
 
@@ -18,6 +20,19 @@ const yesDropData = "--yes-drop-data"
 const refuseDown = "Refusing to migrate down: it rolls back the newest migration, dropping its tables " +
 	"and every row in them. down is for development; to roll back a release, restore the backup " +
 	"taken before `migrate up`. To roll back anyway, run `opamp-server migrate down " + yesDropData + "`."
+
+// How long migrate keeps trying a database it can't reach or that can't
+// answer yet (database.ErrUnavailable), as on a cluster's cold start, where
+// the database may come up after migrate does: attempts first
+// connectRetryFirst apart, the wait doubling up to connectRetryMax, none
+// started after connectRetryBudget from the first and none running past it. Then it
+// exits 1, and whatever runs it (Kubernetes restarts an init container)
+// decides whether to run it again. Variables, so a test can shorten them.
+var (
+	connectRetryBudget = 2 * time.Minute
+	connectRetryFirst  = time.Second
+	connectRetryMax    = 10 * time.Second
+)
 
 // migrate runs `opamp-server migrate up|status` or `migrate down
 // --yes-drop-data` as the owner, with OPAMP_MIGRATION_DATABASE_URL: a
@@ -47,7 +62,7 @@ func migrate(ctx context.Context, args []string, getenv func(string) string, log
 		return 1
 	}
 
-	migrator, err := database.OpenMigrator(ctx, url)
+	migrator, err := openMigrator(ctx, url, logger)
 	if err != nil {
 		logger.Error("migrate: " + describeOpenError(err))
 		return 1
@@ -104,6 +119,56 @@ func migrate(ctx context.Context, args []string, getenv func(string) string, log
 	}
 	return 0
 }
+
+// openMigrator opens the migrator, trying again while the database is
+// unavailable (database.ErrUnavailable) for up to connectRetryBudget, and
+// logs each failed attempt with the wait before the next. Any other error,
+// or a cancelled ctx, ends it at once. A last error that ended the retries
+// says how many attempts it made and for how long.
+func openMigrator(ctx context.Context, url string, logger *slog.Logger) (*database.Migrator, error) {
+	start := time.Now()
+	// No attempt runs past the budget: one still connecting when it ends
+	// fails as a timeout.
+	budgetCtx, cancel := context.WithDeadline(ctx, start.Add(connectRetryBudget))
+	defer cancel()
+	wait := connectRetryFirst
+	for attempt := 1; ; attempt++ {
+		migrator, err := database.OpenMigrator(budgetCtx, url)
+		if err == nil || !errors.Is(err, database.ErrUnavailable) || ctx.Err() != nil {
+			return migrator, err
+		}
+		// Stop rather than start an attempt the budget would cut short: its
+		// timeout would hide why the attempts before it failed.
+		if time.Until(start.Add(connectRetryBudget)) <= wait {
+			return nil, &retriesError{err: err, attempts: attempt, elapsed: time.Since(start)}
+		}
+		logger.Warn("migrate: "+describeOpenError(err)+"; trying again",
+			"attempt", attempt, "retryIn", wait.Round(time.Millisecond).String())
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, err
+		case <-timer.C:
+		}
+		wait = min(2*wait, connectRetryMax)
+	}
+}
+
+// retriesError is the last error of an openMigrator that ran out of time,
+// with how many attempts it made and for how long.
+type retriesError struct {
+	err      error
+	attempts int
+	elapsed  time.Duration
+}
+
+func (e *retriesError) Error() string {
+	return fmt.Sprintf("%s (gave up after %d attempts in %s)",
+		e.err.Error(), e.attempts, e.elapsed.Round(time.Second))
+}
+
+func (e *retriesError) Unwrap() error { return e.err }
 
 // describeOpenError names what went wrong opening the migrator. Its errors
 // never carry the URL or the database driver's text (database.OpenMigrator's
