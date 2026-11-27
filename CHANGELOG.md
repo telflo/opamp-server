@@ -5,7 +5,7 @@ act when you upgrade; [docs/upgrading.md](docs/upgrading.md) says what to
 do. Each release's binaries, image and chart are on its
 [GitHub release](https://github.com/telflo/opamp-server/releases).
 
-## Unreleased
+## 0.3.2 (2026-11-27)
 
 - `migrate` no longer hangs on a database that takes its connection but
   never answers. Its connection gives up after 10 seconds (the URL's
